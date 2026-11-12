@@ -199,7 +199,7 @@ defecto de WildFly.**
     dos lecturas, cero escrituras.
   - `ServicioObraSocialLegadoImpl.java` resuelve contra una tabla fija en memoria, sin tocar
     el `EntityManager` ni ningún repositorio de MediConecta.
-- **Cómo capturarlo en vivo:** `curl http://localhost:8080/mediconecta/ServicioObraSocialLegado?wsdl`
+- **Cómo capturarlo en vivo:** `curl http://localhost:8080/mediconecta/ServicioObraSocialLegadoImpl?wsdl`
   → capturar el WSDL y confirmar que solo lista las dos operaciones.
 
 ---

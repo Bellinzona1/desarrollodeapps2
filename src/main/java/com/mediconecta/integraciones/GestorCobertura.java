@@ -8,6 +8,8 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -24,6 +26,14 @@ import java.util.Set;
 public class GestorCobertura {
 
     private static final Set<String> LEGADAS = Set.of("PAMI", "OSDE", "IOMA");
+
+    /**
+     * Obras sociales conocidas. La ficha del paciente guarda la cobertura con
+     * el plan ("OSDE 210", "Swiss Medical SMG02"), asi que se identifica la
+     * obra social por el comienzo del texto. Las mas largas van primero.
+     */
+    private static final List<String> CONOCIDAS =
+            List.of("SWISS MEDICAL", "MEDICUS", "GALENO", "PAMI", "OSDE", "IOMA");
 
     @Inject
     private GestionPacientes gestionPacientes;
@@ -44,11 +54,23 @@ public class GestorCobertura {
             return new ResultadoCobertura(false, null, 0, "NINGUNA");
         }
 
-        ValidadorCobertura adaptador = esLegada(obraSocial) ? adaptadorLegado : adaptadorPartner;
-        return adaptador.validar(obraSocial, paciente.getDocumento());
+        String nombre = obraSocialDe(obraSocial);
+        ValidadorCobertura adaptador = esLegada(nombre) ? adaptadorLegado : adaptadorPartner;
+        return adaptador.validar(nombre, paciente.getDocumento());
     }
 
-    private boolean esLegada(String obraSocial) {
-        return LEGADAS.contains(obraSocial.trim().toUpperCase());
+    /** "OSDE 210" -> "OSDE"; "Swiss Medical SMG02" -> "SWISS MEDICAL"; otra -> tal cual, en mayusculas. */
+    static String obraSocialDe(String cobertura) {
+        String texto = cobertura.trim().toUpperCase(Locale.ROOT);
+        for (String conocida : CONOCIDAS) {
+            if (texto.equals(conocida) || texto.startsWith(conocida + " ")) {
+                return conocida;
+            }
+        }
+        return texto;
+    }
+
+    static boolean esLegada(String obraSocial) {
+        return LEGADAS.contains(obraSocial);
     }
 }

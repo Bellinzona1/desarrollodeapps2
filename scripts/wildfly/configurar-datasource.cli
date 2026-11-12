@@ -12,7 +12,7 @@
 #  El usuario y la contrasena se pasan como propiedades del sistema para no
 #  dejarlos escritos en un archivo versionado:
 #
-#      jboss-cli.bat --connect ^
+#      jboss-cli.bat --connect --resolve-parameter-values ^
 #          -Dmediconecta.db.usuario=mediconecta ^
 #          -Dmediconecta.db.clave=mediconecta ^
 #          --file=configurar-datasource.cli
@@ -31,6 +31,13 @@ end-if
 if (outcome == success) of /subsystem=datasources/data-source=MediConectaDS:read-resource
     echo "El datasource MediConectaDS ya existia: se elimina y se vuelve a crear."
     /subsystem=datasources/data-source=MediConectaDS:remove
+end-if
+
+# Si se acaba de borrar, el servidor queda en reload-required y el pool viejo
+# sigue activo: sin este reload la prueba de conexion del final usaria la URL
+# anterior. En una instalacion limpia no hace nada.
+if (result == reload-required) of :read-attribute(name=server-state)
+    reload
 end-if
 
 /subsystem=datasources/data-source=MediConectaDS:add( \

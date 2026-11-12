@@ -26,6 +26,7 @@
         <class>com.mediconecta.modelo.Profesional</class>
         <class>com.mediconecta.modelo.Disponibilidad</class>
         <class>com.mediconecta.modelo.Turno</class>
+        <class>com.mediconecta.modelo.Usuario</class>
 
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
 

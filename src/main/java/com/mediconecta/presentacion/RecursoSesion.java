@@ -22,7 +22,8 @@ import java.util.List;
  *
  * <p>La interfaz consulta este recurso al cargar para saber que opciones mostrar.
  * Es importante entender que esto <b>no</b> es la seguridad: el usuario y los
- * roles salen del {@link SecurityContext} que armo el contenedor al autenticar,
+ * roles salen del {@link SecurityContext} que armo el contenedor a partir del
+ * JWT recibido (ver {@code seguridad.MecanismoAutenticacionJwt}),
  * y ocultar un boton en el navegador no autoriza nada. Quien autoriza de verdad
  * es {@code @RolesAllowed} sobre los metodos de negocio; si alguien llamara al
  * endpoint a mano igual recibiria un 403.</p>
@@ -56,6 +57,15 @@ public class RecursoSesion {
         return sesion;
     }
 
+    /**
+     * Cierra la sesion del lado del servidor.
+     *
+     * <p>Con JWT no hay nada que "cerrar" en la autenticacion: el token es
+     * stateless y deja de usarse cuando la interfaz lo descarta. Lo que si hay
+     * que liberar es la sesion HTTP que mantiene viva la conversacion del
+     * asistente {@code @Stateful}, para que el contenedor la descarte ya y no
+     * a los 30 minutos.</p>
+     */
     @POST
     @Path("/logout")
     public Response salir() throws ServletException {

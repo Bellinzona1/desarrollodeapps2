@@ -70,3 +70,17 @@ CREATE INDEX IF NOT EXISTS ix_turnos_fecha        ON turnos (fecha_hora);
 CREATE INDEX IF NOT EXISTS ix_turnos_profesional  ON turnos (profesional_id, fecha_hora);
 CREATE INDEX IF NOT EXISTS ix_turnos_paciente     ON turnos (paciente_id);
 CREATE INDEX IF NOT EXISTS ix_disp_profesional    ON disponibilidades (profesional_id);
+
+-- Usuarios (Entrega 2): autenticacion con JWT. La contrasena se guarda como
+-- hash PBKDF2 (pbkdf2$iteraciones$sal$hash), nunca en claro.
+CREATE TABLE IF NOT EXISTS usuarios (
+    id          BIGSERIAL    PRIMARY KEY,
+    usuario     VARCHAR(60)  NOT NULL UNIQUE,
+    hash_clave  VARCHAR(200) NOT NULL,
+    activo      BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS usuario_roles (
+    usuario_id  BIGINT      NOT NULL REFERENCES usuarios (id),
+    rol         VARCHAR(20) NOT NULL
+);

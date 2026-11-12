@@ -8,7 +8,7 @@
  * operacion.
  */
 
-import { api, contexto, irALogin } from './api.js';
+import { api, contexto, irALogin, leerToken, borrarToken } from './api.js';
 import { esc, iniciales, avisoError } from './ui.js';
 
 const ICONOS = {
@@ -162,6 +162,7 @@ async function dibujarTopbar(sesion) {
         } catch (error) {
             // Aunque falle el logout del servidor, conviene sacar al usuario.
         }
+        borrarToken();
         irALogin();
     });
 }
@@ -173,6 +174,12 @@ async function dibujarTopbar(sesion) {
 export async function iniciarLayout() {
     const pagina = document.body.dataset.pagina;
     let sesion;
+
+    // Sin token no tiene sentido ni consultar la API.
+    if (!leerToken()) {
+        irALogin();
+        throw new Error('sin sesion');
+    }
 
     try {
         sesion = await api.sesion();

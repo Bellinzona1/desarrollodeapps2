@@ -6,9 +6,8 @@
     <title>MediConecta</title>
     <link rel="stylesheet" href="css/styles.css">
     <!--
-        El punto de entrada de la aplicacion. Lleva a las pantallas, que estan
-        bajo /app/ y protegidas por la security-constraint de web.xml: si no hay
-        sesion, el contenedor muestra el login antes de dejar pasar.
+        El punto de entrada de la aplicacion. Lleva al tablero; si no hay un
+        token JWT guardado, layout.js lo manda a login.html.
     -->
     <meta http-equiv="refresh" content="0; url=app/index.html">
 </head>

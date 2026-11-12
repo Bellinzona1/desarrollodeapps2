@@ -143,4 +143,30 @@ public class Turno {
     public void setArchivado(boolean archivado) {
         this.archivado = archivado;
     }
+
+    // ------------------------------------------------------------------
+    // Patron State: el turno es el "contexto" y delega cada transicion en el
+    // objeto de su estado actual. Si la transicion no corresponde, el estado
+    // lanza TransicionInvalidaException (409 en la API).
+    // ------------------------------------------------------------------
+
+    /** PROGRAMADO -> CANCELADO. */
+    public void cancelar() {
+        estado.comportamiento().cancelar(this);
+    }
+
+    /** PROGRAMADO -> ATENDIDO. */
+    public void atender() {
+        estado.comportamiento().atender(this);
+    }
+
+    /** Saca de la agenda un turno CANCELADO sin borrarlo. */
+    public void archivar() {
+        estado.comportamiento().archivar(this);
+    }
+
+    /** Si el turno bloquea el horario del profesional (los cancelados no). */
+    public boolean ocupaHorario() {
+        return estado.comportamiento().ocupaHorario();
+    }
 }

@@ -1,44 +1,55 @@
 /**
  * Pantalla de login.
  *
- * No valida credenciales ni guarda roles: de eso se ocupa el contenedor cuando
- * el formulario hace POST a j_security_check. Aca solo se ajusta la URL del
- * formulario, se muestra el error del intento anterior y se evita que alguien
- * que ya inicio sesion vuelva a ver esta pantalla.
+ * Cambia usuario y contrasena por un JWT (POST /api/auth/login), lo guarda y
+ * lleva al tablero. La contrasena la verifica el servidor contra un hash
+ * PBKDF2; aca no se valida nada ni se deciden roles.
  */
 
-import { contexto } from './api.js';
+import { api, contexto, guardarToken, leerToken, borrarToken, ErrorApi } from './api.js';
 
-const COOKIE_ERROR = 'mediconecta_login_error';
+const formulario = document.getElementById('form-login');
+const mensaje = document.getElementById('mensaje');
+const boton = document.getElementById('boton-ingresar');
 
-function leerCookie(nombre) {
-    return document.cookie.split(';')
-        .map(c => c.trim())
-        .find(c => c.startsWith(nombre + '='));
+function mostrarError(texto) {
+    mensaje.hidden = false;
+    mensaje.textContent = texto;
 }
 
-function borrarCookie(nombre) {
-    document.cookie = nombre + '=; Max-Age=0; path=' + (contexto || '/');
+function irAlTablero() {
+    window.location.href = contexto + '/app/index.html';
 }
 
-function mostrarError() {
-    if (!leerCookie(COOKIE_ERROR)) {
+// Si ya hay un token valido no tiene sentido volver a pedir credenciales.
+if (leerToken()) {
+    api.sesion()
+        .then(sesion => { if (sesion && sesion.autenticado) { irAlTablero(); } })
+        .catch(() => borrarToken());
+}
+
+formulario.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    mensaje.hidden = true;
+
+    const usuario = document.getElementById('usuario').value.trim();
+    const clave = document.getElementById('clave').value;
+    if (!usuario || !clave) {
+        mostrarError('Ingresá usuario y contraseña.');
         return;
     }
-    borrarCookie(COOKIE_ERROR);
-    const mensaje = document.getElementById('mensaje');
-    mensaje.hidden = false;
-    mensaje.textContent = 'Usuario o contraseña incorrectos. Volvé a intentar.';
-}
 
-// Esta pantalla no consulta /api/sesion a proposito. Esa llamada daria 401
-// cuando todavia no hay sesion, y el contenedor guardaria esa URL como destino
-// posterior al login: el usuario terminaria viendo un JSON en vez del tablero.
-// De quien ya inicio sesion se encarga ServletLogin, que lo desvia al tablero
-// antes de llegar aca.
-
-// El formulario se arma desde el context root real para que funcione tambien si
-// el WAR se despliega con otro nombre.
-document.getElementById('form-login').action = contexto + '/j_security_check';
-
-mostrarError();
+    boton.disabled = true;
+    boton.textContent = 'Ingresando...';
+    try {
+        const respuesta = await api.login(usuario, clave);
+        guardarToken(respuesta.token);
+        irAlTablero();
+    } catch (error) {
+        mostrarError(error instanceof ErrorApi && error.codigo === 401
+            ? 'Usuario o contraseña incorrectos. Volvé a intentar.'
+            : (error.message || 'No se pudo iniciar sesión.'));
+        boton.disabled = false;
+        boton.textContent = 'Ingresar';
+    }
+});

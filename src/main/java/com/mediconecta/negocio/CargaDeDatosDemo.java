@@ -3,9 +3,12 @@ package com.mediconecta.negocio;
 import com.mediconecta.datos.RepositorioPacientes;
 import com.mediconecta.datos.RepositorioProfesionales;
 import com.mediconecta.datos.RepositorioTurnos;
+import com.mediconecta.datos.RepositorioUsuarios;
 import com.mediconecta.modelo.Disponibilidad;
 import com.mediconecta.modelo.Paciente;
 import com.mediconecta.modelo.Profesional;
+import com.mediconecta.modelo.Usuario;
+import com.mediconecta.seguridad.HashDeClaves;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.ejb.Singleton;
@@ -62,8 +65,19 @@ public class CargaDeDatosDemo {
     @Inject
     private FabricaTurnos fabricaTurnos;
 
+    @Inject
+    private RepositorioUsuarios repositorioUsuarios;
+
+    /** Contrasena de los usuarios de demostracion (ficticios, solo para la defensa). */
+    static final String CLAVE_DEMO = "Demo.2026";
+
     @PostConstruct
     void cargar() {
+        // Los usuarios se cargan aparte del resto: una base que ya traia datos
+        // de la Entrega 1 (cuando los usuarios vivian en WildFly) tambien tiene
+        // que recibirlos para poder iniciar sesion con JWT.
+        cargarUsuarios();
+
         if (!repositorioProfesionales.listarTodos().isEmpty()) {
             LOG.info("[DEMO] La base ya tiene datos: no se carga el juego de ejemplo.");
             return;
@@ -92,6 +106,21 @@ public class CargaDeDatosDemo {
         agendar(carla, sofia, proximoDia(LUNES_MIERCOLES_VIERNES, 1).atTime(10, 0), "Control pediatrico");
 
         LOG.info("[DEMO] Juego de datos de ejemplo cargado: 4 profesionales, 4 pacientes, 3 turnos.");
+    }
+
+    private void cargarUsuarios() {
+        if (repositorioUsuarios.contar() > 0) {
+            return;
+        }
+        crearUsuario("paciente", Roles.PACIENTE);
+        crearUsuario("recepcion", Roles.RECEPCION);
+        crearUsuario("medico", Roles.MEDICO);
+        crearUsuario("admin", Roles.ADMIN);
+        LOG.info("[DEMO] Usuarios de demostracion creados: paciente, recepcion, medico, admin.");
+    }
+
+    private void crearUsuario(String nombre, String rol) {
+        repositorioUsuarios.guardar(new Usuario(nombre, HashDeClaves.calcular(CLAVE_DEMO), Set.of(rol)));
     }
 
     private Profesional crearProfesional(String nombre, String especialidad, String matricula,

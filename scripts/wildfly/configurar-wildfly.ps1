@@ -8,14 +8,19 @@
        1. descarga el driver JDBC de PostgreSQL desde Maven Central;
        2. lo instala como modulo de WildFly (org.postgresql);
        3. crea el datasource java:/jdbc/MediConectaDS;
-       4. crea los cuatro usuarios de demostracion con sus roles.
+       4. prepara la seguridad JWT (integrated-jaspi=false) y recarga.
+
+     Los usuarios de demostracion ya NO se crean en WildFly: desde la
+     Entrega 2 viven en la tabla "usuarios" (contrasena con hash PBKDF2) y los
+     carga la aplicacion al desplegar.
 
      Uso (PowerShell, desde cualquier carpeta):
 
          .\configurar-wildfly.ps1 -WildFly "C:\wildfly-36.0.1.Final"
 
      Los pasos 1 y 2 necesitan el servidor APAGADO.
-     El paso 3 necesita el servidor ENCENDIDO: el script avisa y espera.
+     Los pasos 3 y 4 necesitan el servidor ENCENDIDO, con el perfil
+     standalone-full.xml (bin\standalone.bat -c standalone-full.xml).
 
      Las credenciales de PostgreSQL se pueden pasar por parametro; el valor por
      omision es el del contenedor Docker de scripts/db/levantar-postgres.ps1.
@@ -31,8 +36,7 @@ param(
     [string] $UsuarioBase   = "mediconecta",
     [string] $ClaveBase     = "mediconecta",
     [string] $UrlBase       = "jdbc:postgresql://localhost:5432/mediconecta",
-    [string] $ClaveDemo     = "Demo.2026",
-    [switch] $SoloUsuarios,
+    [switch] $SoloSeguridad,
     [switch] $SoloDatasource
 )
 
@@ -48,10 +52,9 @@ if (-not (Test-Path $WildFly)) {
 }
 
 $cli = Join-Path $WildFly "bin\jboss-cli.bat"
-$addUser = Join-Path $WildFly "bin\add-user.bat"
 
 # ---------------------------------------------------------------- 1 y 2 -----
-if (-not $SoloUsuarios -and -not $SoloDatasource) {
+if (-not $SoloSeguridad -and -not $SoloDatasource) {
 
     Paso "Descargando el driver de PostgreSQL $VersionDriver"
 
@@ -75,13 +78,16 @@ if (-not $SoloUsuarios -and -not $SoloDatasource) {
 }
 
 # ------------------------------------------------------------------- 3 ------
-if (-not $SoloUsuarios) {
+if (-not $SoloSeguridad) {
 
     Paso "Creando el datasource java:/jdbc/MediConectaDS (el servidor debe estar ENCENDIDO)"
 
     $script = Join-Path $PSScriptRoot "configurar-datasource.cli"
 
-    & $cli --connect `
+    # --resolve-parameter-values hace que el CLI reemplace ${mediconecta.db.*}
+    # con los -D de abajo ANTES de mandar la operacion. Sin esa opcion el
+    # servidor guarda la expresion tal cual y siempre usa el valor por omision.
+    & $cli --connect --resolve-parameter-values `
         "-Dmediconecta.db.url=$UrlBase" `
         "-Dmediconecta.db.usuario=$UsuarioBase" `
         "-Dmediconecta.db.clave=$ClaveBase" `
@@ -93,25 +99,11 @@ if (-not $SoloUsuarios) {
 }
 
 # ------------------------------------------------------------------- 4 ------
-if (-not $SoloDatasource) {
+Paso "Preparando la seguridad JWT (integrated-jaspi=false)"
 
-    Paso "Creando los usuarios de demostracion"
-
-    $usuarios = @(
-        @{ Usuario = "paciente";  Rol = "PACIENTE"  },
-        @{ Usuario = "recepcion"; Rol = "RECEPCION" },
-        @{ Usuario = "medico";    Rol = "MEDICO"    },
-        @{ Usuario = "admin";     Rol = "ADMIN"     }
-    )
-
-    foreach ($u in $usuarios) {
-        & $addUser -a -u $u.Usuario -p $ClaveDemo -g $u.Rol | Out-Null
-        Write-Host ("   {0,-10} rol {1}" -f $u.Usuario, $u.Rol)
-    }
-
-    Write-Host ""
-    Write-Host "   Son usuarios locales ficticios, solo para la defensa." -ForegroundColor Yellow
-    Write-Host "   Quedan en standalone\configuration\application-users.properties" -ForegroundColor Yellow
+& $cli --connect "--file=$(Join-Path $PSScriptRoot 'configurar-seguridad.cli')"
+if ($LASTEXITCODE -ne 0) {
+    throw "No se pudo configurar la seguridad. Verifica que WildFly este levantado."
 }
 
 Write-Host ""

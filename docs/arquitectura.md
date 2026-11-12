@@ -398,9 +398,28 @@ que hablar con una obra social por SOAP y con otra por REST detrás de una misma
 Implementarlo ahora, sin ningún sistema externo del otro lado, sería crear una clase vacía
 para poder decir que el patrón existe.
 
+### 4.4 State (Entrega 2)
+
+**Dónde:** `com.mediconecta.modelo.estado` — interfaz `EstadoDelTurno` con `TurnoProgramado`,
+`TurnoCancelado` y `TurnoAtendido`; `Turno` es el contexto.
+
+**Qué problema resuelve.** Qué puede hacerse con un turno depende de su estado, y esas reglas
+eran `if (estado == ...)` repartidos en cada método de `GestionTurnos`. Cada operación nueva
+(como *atender*) obligaba a revisar todos los `if`.
+
+**Cómo lo resuelve.** `turno.cancelar()`, `turno.atender()` y `turno.archivar()` delegan en el
+objeto del estado actual. Por omisión toda transición es inválida y lanza
+`TransicionInvalidaException`, que la API traduce a **409 Conflict**; cada estado solo
+sobreescribe las transiciones que acepta. El detalle está en
+[`Entrega_Obligatoria_2.md`](Entrega_Obligatoria_2.md) §9.3.
+
 ---
 
 ## 5. Seguridad
+
+> **Desde la Entrega 2 la autenticación es por JWT** y no por FORM: lo que sigue en §5.1 y
+> §5.5 describe el mecanismo de la Entrega 1. La autorización (§5.2 a §5.4) no cambió. El
+> mecanismo actual está en [`Entrega_Obligatoria_2.md`](Entrega_Obligatoria_2.md) §9.2.
 
 ### 5.1 Mecanismo
 
@@ -455,6 +474,7 @@ un servicio SOAP.
 | Ver un turno puntual | ✔ | ✔ | ✔ | ✔ |
 | Agendar un turno directo | solo para sí mismo | ✔ | — | ✔ |
 | Cancelar un turno | solo el propio | ✔ | solo de su agenda | ✔ |
+| Marcar un turno atendido | — | — | solo de su agenda | ✔ |
 | **Archivar un turno cancelado** | — | ✔ | — | ✔ |
 | Listar el padrón de pacientes | — | ✔ | ✔ | ✔ |
 | Registrar un paciente | ✔ | ✔ | — | ✔ |

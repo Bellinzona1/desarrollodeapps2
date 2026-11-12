@@ -3,6 +3,7 @@ package com.mediconecta.integraciones;
 import com.mediconecta.integraciones.simulacion.ServicioObraSocialLegado;
 import com.mediconecta.negocio.IntegracionExternaException;
 
+import jakarta.ejb.LocalBean;
 import jakarta.ejb.Stateless;
 import jakarta.xml.ws.Service;
 import jakarta.xml.ws.WebServiceException;
@@ -24,11 +25,14 @@ import java.net.URL;
  * vez desplegado mirando el log de arranque de WildFly, que imprime la URL
  * publicada de cada servicio SOAP.</p>
  */
+// @LocalBean: un EJB que implementa una interfaz solo expone esa interfaz;
+// GestorCobertura inyecta cada adaptador por su clase concreta para elegir cual usar.
+@LocalBean
 @Stateless
 public class AdaptadorObraSocialLegado implements ValidadorCobertura {
 
     private static final String WSDL_POR_DEFECTO =
-            "http://localhost:8080/mediconecta/ServicioObraSocialLegado?wsdl";
+            "http://localhost:8080/mediconecta/ServicioObraSocialLegadoImpl?wsdl";
 
     private static final QName NOMBRE_SERVICIO =
             new QName("http://simulacion.integraciones.mediconecta.com/", "ServicioObraSocialLegadoImplService");

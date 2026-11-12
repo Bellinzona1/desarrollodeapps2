@@ -35,6 +35,7 @@
         <class>com.mediconecta.datos.memoria.RepositorioTurnosEnMemoria</class>
         <class>com.mediconecta.datos.memoria.RepositorioPacientesEnMemoria</class>
         <class>com.mediconecta.datos.memoria.RepositorioProfesionalesEnMemoria</class>
+        <class>com.mediconecta.datos.memoria.RepositorioUsuariosEnMemoria</class>
     </alternatives>
     -->
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Asocia el WAR al application-security-domain "other" de WildFly.
+
+    Sin <login-config> en web.xml, esta asociacion explicita es la que hace que
+    Undertow active la seguridad del despliegue y use el mecanismo JWT de
+    Jakarta Security (seguridad.MecanismoAutenticacionJwt). "other" es el mismo
+    dominio que usa el contenedor de EJB, asi que la identidad del token llega
+    intacta a @RolesAllowed.
+-->
+<jboss-web xmlns="urn:jboss:jakartaee:1.0"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="urn:jboss:jakartaee:1.0 https://www.jboss.org/schema/jbossas/jboss-web_15_0.xsd"
+           version="15.0">
+    <security-domain>other</security-domain>
+</jboss-web>

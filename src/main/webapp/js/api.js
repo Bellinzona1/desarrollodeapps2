@@ -1,8 +1,8 @@
 /**
  * Cliente HTTP de la API de MediConecta.
  *
- * Todas las llamadas pasan por aca para que el manejo de errores y de la sesion
- * vencida este en un solo lugar.
+ * Todas las llamadas pasan por aca para que el manejo de errores, del token JWT
+ * y de la sesion vencida este en un solo lugar.
  */
 
 /**
@@ -12,6 +12,25 @@
 export const contexto = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 
 const BASE = contexto + '/api';
+
+/**
+ * Donde se guarda el JWT. sessionStorage y no localStorage: el token muere al
+ * cerrar la pestana. Todo dato del servidor se inserta con esc(), que es la
+ * defensa contra un XSS que intentara leerlo.
+ */
+const CLAVE_TOKEN = 'mediconecta.token';
+
+export function guardarToken(token) {
+    try { sessionStorage.setItem(CLAVE_TOKEN, token); } catch (e) { /* sin almacenamiento */ }
+}
+
+export function leerToken() {
+    try { return sessionStorage.getItem(CLAVE_TOKEN); } catch (e) { return null; }
+}
+
+export function borrarToken() {
+    try { sessionStorage.removeItem(CLAVE_TOKEN); } catch (e) { /* sin almacenamiento */ }
+}
 
 /** Error con el mensaje que devolvio el servidor y su codigo HTTP. */
 export class ErrorApi extends Error {
@@ -26,12 +45,17 @@ async function pedir(metodo, ruta, cuerpo) {
         method: metodo,
         headers: {
             'Accept': 'application/json',
-            // Le avisa al servlet de login que somos un cliente JSON y que ante
-            // una sesion vencida queremos un 401 y no la pagina de login.
             'X-Requested-With': 'XMLHttpRequest'
         },
+        // La cookie de sesion sigue viajando: la necesita la conversacion del
+        // asistente @Stateful. La identidad, en cambio, va en el token.
         credentials: 'same-origin'
     };
+
+    const token = leerToken();
+    if (token) {
+        opciones.headers['Authorization'] = 'Bearer ' + token;
+    }
 
     // Los recursos declaran @Consumes(APPLICATION_JSON), asi que incluso las
     // operaciones sin cuerpo (confirmar, cancelar, volver) tienen que declarar
@@ -51,6 +75,7 @@ async function pedir(metodo, ruta, cuerpo) {
     }
 
     if (respuesta.status === 401) {
+        borrarToken();
         irALogin();
         throw new ErrorApi('Su sesion vencio. Vuelva a iniciar sesion.', 401);
     }
@@ -79,25 +104,17 @@ async function pedir(metodo, ruta, cuerpo) {
     return datos;
 }
 
-/**
- * Manda al usuario a iniciar sesion cuando la suya vencio.
- *
- * Apunta al tablero y no a login.html a proposito: el tablero esta protegido,
- * asi que el contenedor lo intercepta, guarda esa URL como destino, muestra el
- * login y, una vez validadas las credenciales, devuelve al usuario justo ahi.
- * Si en cambio fueramos directo a login.html, el contenedor recordaria como
- * destino la ultima URL que dio 401, que suele ser una llamada a la API, y el
- * usuario terminaria viendo un JSON despues de iniciar sesion.
- */
+/** Manda al usuario a la pantalla de login (sin token o con el token vencido). */
 export function irALogin() {
     if (window.location.pathname.endsWith('/login.html')) {
         return;
     }
-    window.location.href = contexto + '/app/index.html';
+    window.location.href = contexto + '/login.html';
 }
 
 export const api = {
     // Sesion
+    login: (usuario, clave) => pedir('POST', '/auth/login', { usuario, clave }),
     sesion: () => pedir('GET', '/sesion'),
     cerrarSesion: () => pedir('POST', '/sesion/logout'),
 
@@ -109,6 +126,7 @@ export const api = {
     turno: (id) => pedir('GET', '/turnos/' + encodeURIComponent(id)),
     crearTurno: (pedido) => pedir('POST', '/turnos', pedido),
     cancelarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/cancelar'),
+    atenderTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/atender'),
     archivarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/archivar'),
 
     // Pacientes

@@ -74,6 +74,29 @@ async function puedeCancelarEste(sesion, turno) {
     return false;
 }
 
+/**
+ * Si la persona puede marcar este turno como atendido: un MEDICO sobre su
+ * propia agenda, o un ADMIN. Igual quien decide es el servidor (y el estado del
+ * turno: desde otro estado que no sea PROGRAMADO responde 409).
+ */
+async function puedeAtenderEste(sesion, turno) {
+    if (turno.estado !== 'PROGRAMADO') {
+        return false;
+    }
+    if (tieneRol(sesion, 'ADMIN')) {
+        return true;
+    }
+    if (tieneRol(sesion, 'MEDICO')) {
+        try {
+            const perfil = await api.miPerfilProfesional();
+            return perfil.id === turno.profesional.id;
+        } catch (error) {
+            return false;
+        }
+    }
+    return false;
+}
+
 function notaSegunEstado(turno) {
     if (turno.estado === 'ATENDIDO') {
         return 'Este turno ya fue atendido.';
@@ -89,6 +112,7 @@ async function iniciar() {
     const detalle = document.getElementById('detalle');
     const botonCancelar = document.getElementById('boton-cancelar');
     const botonArchivar = document.getElementById('boton-archivar');
+    const botonAtender = document.getElementById('boton-atender');
     const nota = document.getElementById('nota-permisos');
 
     ajustarEnlaceVolver(sesion);
@@ -112,12 +136,34 @@ async function iniciar() {
     dibujar(turno);
     nota.textContent = notaSegunEstado(turno);
 
+    if (await puedeAtenderEste(sesion, turno)) {
+        botonAtender.hidden = false;
+    }
+
     if (await puedeCancelarEste(sesion, turno)) {
         botonCancelar.hidden = false;
     } else if (turno.estado === 'CANCELADO' && tieneRol(sesion, 'RECEPCION', 'ADMIN')) {
         botonArchivar.hidden = false;
         nota.textContent = 'Podés sacarlo de la agenda: el registro se conserva en el historial.';
     }
+
+    botonAtender.addEventListener('click', async () => {
+        botonAtender.disabled = true;
+        botonAtender.textContent = 'Guardando...';
+        try {
+            turno = await api.atenderTurno(turno.id);
+            dibujar(turno);
+            avisoExito('El turno quedó registrado como atendido.');
+            botonAtender.hidden = true;
+            botonCancelar.hidden = true;
+            nota.textContent = notaSegunEstado(turno);
+        } catch (error) {
+            reportar(error);
+            mensajeEnCaja(document.getElementById('mensaje'), error.message, 'error');
+            botonAtender.disabled = false;
+            botonAtender.textContent = 'Marcar atendido';
+        }
+    });
 
     botonCancelar.addEventListener('click', async () => {
         const ok = await confirmar(
@@ -139,6 +185,7 @@ async function iniciar() {
             mensajeEnCaja(document.getElementById('mensaje'),
                 'El turno fue cancelado. Su horario volvió a quedar libre.', 'exito');
             botonCancelar.hidden = true;
+            botonAtender.hidden = true;
             if (tieneRol(sesion, 'RECEPCION', 'ADMIN')) {
                 botonArchivar.hidden = false;
                 nota.textContent = 'Podés sacarlo de la agenda: el registro se conserva en el historial.';

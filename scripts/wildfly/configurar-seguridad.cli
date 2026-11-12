@@ -1,0 +1,24 @@
+# =============================================================================
+#  MediConecta - seguridad JWT (Jakarta Security) en WildFly
+# =============================================================================
+#
+#  Se ejecuta con el servidor YA LEVANTADO:
+#
+#      bin\jboss-cli.bat --connect --file=configurar-seguridad.cli
+#
+#  Desde la Entrega 2 la autenticacion la hace el propio WAR con un
+#  HttpAuthenticationMechanism de Jakarta Security que valida un JWT
+#  (seguridad.MecanismoAutenticacionJwt). Ese mecanismo le informa al contenedor
+#  el usuario y los roles que vienen dentro del token.
+#
+#  Por omision (integrated-jaspi=true) WildFly ignoraria esos roles y buscaria
+#  al usuario en application-users.properties. Con integrated-jaspi=false acepta
+#  la identidad que arma el mecanismo ("identidad ad-hoc"), y esa misma
+#  identidad es la que ve @RolesAllowed en los EJB.
+# =============================================================================
+
+/subsystem=undertow/application-security-domain=other:write-attribute(name=integrated-jaspi, value=false)
+
+echo "integrated-jaspi=false en el application-security-domain 'other'. Recargando el servidor..."
+
+reload

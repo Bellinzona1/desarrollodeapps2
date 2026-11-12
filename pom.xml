@@ -11,7 +11,7 @@
     <packaging>war</packaging>
 
     <name>MediConecta - Componente Gestion de Turnos</name>
-    <description>Entrega 1 del TP Integrador de Desarrollo de Aplicaciones II</description>
+    <description>TP Integrador de Desarrollo de Aplicaciones II</description>
 
     <properties>
         <!-- UTF-8 en todo el proyecto: es obligatorio para que el mensaje
@@ -33,6 +33,22 @@
             <version>10.0.0</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- ===== Solo para los tests unitarios (scope test: NO entran al WAR) ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Implementacion de JSON-P para ServicioJwt en los tests. En el
+             servidor la aporta WildFly (modulo org.eclipse.parsson). -->
+        <dependency>
+            <groupId>org.eclipse.parsson</groupId>
+            <artifactId>parsson</artifactId>
+            <version>1.1.7</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -45,6 +61,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <!-- Ejecuta los tests de JUnit 5 en "mvn test" y en "mvn package". -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

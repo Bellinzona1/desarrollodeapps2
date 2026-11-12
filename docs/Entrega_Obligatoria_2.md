@@ -8,6 +8,7 @@
 | **Sistema** | MediConecta — gestión de turnos médicos |
 | **Plataforma** | Jakarta EE 10 · Java 17 · Maven · WAR |
 | **Contenedor** | WildFly (perfil **`standalone-full.xml`**, ver §3.5) |
+| **Seguridad** | JWT (Jakarta Security) + `@RolesAllowed`, ver §9.2 |
 | **Base de datos** | PostgreSQL |
 | **Context root** | `/mediconecta` |
 | **Repositorio** | <https://github.com/tobiasbonomo29/desarrollo-de-apps2> |
@@ -214,11 +215,12 @@ endpoint `GET /api/pacientes/{documento}/cobertura` — no distingue un caso del
 `ServicioObraSocialLegadoImpl` es un EJB `@Stateless` anotado `@WebService`. WildFly lo
 publica automáticamente como servicio SOAP al desplegar el WAR, con su WSDL generado, sin
 ninguna configuración adicional en `web.xml` (es la misma mecánica con la que WildFly ya
-publica el EJB como invocable remoto; acá además lo expone por SOAP). La URL del WSDL queda,
-por defecto del nombre del EJB:
+publica el EJB como invocable remoto; acá además lo expone por SOAP). JBossWS toma el nombre
+simple de la clase de implementación para la ruta, así que el WSDL queda en (verificado sobre
+WildFly 36.0.1.Final):
 
 ```
-http://localhost:8080/mediconecta/ServicioObraSocialLegado?wsdl
+http://localhost:8080/mediconecta/ServicioObraSocialLegadoImpl?wsdl
 ```
 
 **Por qué el "sistema legado" vive en el mismo WAR.** En un escenario real este servicio lo
@@ -321,15 +323,19 @@ funcionar apenas el broker está disponible de nuevo.
 
 ## 6. Demostración de un flujo completo (de punta a punta)
 
-Pasos para mostrar en la defensa, con `curl` (reemplazar usuario/contraseña por los de
-`README.md`, sección "Usuarios de demostración"; requiere sesión autenticada por FORM, igual
-que el resto de la API):
+Pasos para mostrar en la defensa, con `curl`. Toda la API pide un JWT (§9.2), así que
+primero se obtiene el token:
 
 ```bash
+# 0) Login: cambia usuario y contraseña por un JWT
+TOKEN=$(curl -s -X POST http://localhost:8080/mediconecta/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"usuario":"recepcion","clave":"Demo.2026"}' | python -c "import sys,json;print(json.load(sys.stdin)['token'])")
+
 # 1) Reservar un turno: dispara la transacción con el alta + los dos mensajes JMS
 curl -s -X POST http://localhost:8080/mediconecta/api/turnos \
   -H "Content-Type: application/json" \
-  -b cookies.txt \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"documentoPaciente":"30111222","profesionalId":1,
        "especialidad":"Cardiologia","fechaHora":"2026-11-20T10:00","motivo":"Control"}'
 
@@ -339,17 +345,17 @@ curl -s -X POST http://localhost:8080/mediconecta/api/turnos \
 #    [JMS-TOPICO] recordatorio para el profesional -> ...
 
 # 3) Validar cobertura de un paciente con obra social "legada" (va por SOAP)
-curl -s -b cookies.txt \
+curl -s -H "Authorization: Bearer $TOKEN" \
   http://localhost:8080/mediconecta/api/pacientes/30111222/cobertura
 # -> {"vigente":true,"plan":"OSDE 210","copago":0.0,"origen":"LEGADO"}
 
 # 4) Validar cobertura de un paciente con obra social "moderna" (va por REST)
-curl -s -b cookies.txt \
-  http://localhost:8080/mediconecta/api/pacientes/30333444/cobertura
+curl -s -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/mediconecta/api/pacientes/28999888/cobertura
 # -> {"vigente":true,"plan":"SMG20","copago":3500.0,"origen":"PARTNER"}
 
 # 5) (opcional) Ver el WSDL publicado del sistema legado
-curl -s http://localhost:8080/mediconecta/ServicioObraSocialLegado?wsdl
+curl -s http://localhost:8080/mediconecta/ServicioObraSocialLegadoImpl?wsdl
 
 # 6) (opcional) Llamar directamente a la API simulada del partner, sin pasar por MediConecta
 curl -s "http://localhost:8080/mediconecta/partner/cobertura?obraSocial=GALENO&afiliado=123"
@@ -375,14 +381,129 @@ de un flujo completo que conecte los componentes involucrados" de la consigna.
 
 ## 8. Qué queda pendiente
 
-- **Verificar el despliegue real.** Todo lo de esta entrega se escribió y se compiló
-  (`mvn clean package`, `BUILD SUCCESS`) pero no se pudo desplegar ni probar contra un WildFly
-  en este entorno de trabajo. Antes de la defensa falta: confirmar que WildFly arranca con
-  `standalone-full.xml`, confirmar la URL exacta en la que queda publicado el WSDL del sistema
-  legado (puede variar según la versión de WildFly) y correr el flujo completo de la §6.
-- **Pruebas automatizadas** de los nuevos flujos (mensajería e integración), análogas a las
-  que ya existen para ownership y archivado.
 - **Trello.** Queda explícitamente fuera de esta actualización — no se tocó el tablero real;
   sigue pendiente lo que ya se detalla en `docs/trello-actualizaciones.md`.
+- **Feedback del diseño.** Ver §9.6.
 - **Casos de uso y manual de usuario**, cubiertos en documentos separados:
   [`docs/casos-de-uso.md`](casos-de-uso.md) y [`docs/manual-usuario.md`](manual-usuario.md).
+
+---
+
+## 9. Cierre de la 2.ª entrega parcial (13/11): el núcleo funcionando
+
+### 9.1 Requisitos y evidencia
+
+| Requisito de la consigna | Dónde está | Cómo se verifica |
+|---|---|---|
+| Componentes en capas desplegados y un flujo de punta a punta | WAR desplegado en WildFly 36.0.1.Final (`standalone-full.xml`) + PostgreSQL 16 | `scripts/smoke-test.ps1`: login → reserva guiada → turno → JMS |
+| Patrones implementados en el código | DAO/Repository, Facade, Factory (`arquitectura.md` §4), Adapter (§4 de este documento) y **State** (§9.3) | tests unitarios + smoke test |
+| **State en la entidad central devuelve 409** ante una transición inválida | `modelo.estado.*`, `Turno.cancelar/atender/archivar`, `ManejadorTransicionInvalida` | `EstadoDelTurnoTest`; sección "PATRON STATE" del smoke test |
+| Seguridad base: **JWT** y control de acceso por rol | `seguridad.MecanismoAutenticacionJwt`, `ServicioJwt`, `POST /api/auth/login`; `@RolesAllowed` en negocio | `ServicioJwtTest`; sección "SEGURIDAD" del smoke test (401 sin token, 401 con firma alterada, 403 por rol) |
+| Mensajería funcionando en al menos un proceso | cola `ColaConfirmaciones` + tópico `TopicoRecordatorios` (§3) | sección "MENSAJERIA JMS" del smoke test, con `-LogWildFly` |
+| Primeros tests unitarios | `src/test/java` — 46 tests JUnit 5, sin contenedor ni base | `mvn test` |
+| Feedback del diseño incorporado | §9.6 | — |
+
+**Resultado verificado el 11/11/2026** sobre WildFly 36.0.1.Final + JDK 24 + PostgreSQL 16:
+`mvn clean package` → 46 tests OK; `smoke-test.ps1 -LogWildFly ...` → **95 pruebas OK, 0
+fallidas**.
+
+### 9.2 Autenticación con JWT
+
+El login FORM de la Entrega 1 se reemplazó por **JWT**, sin agregar dependencias al WAR:
+
+```
+POST /api/auth/login {"usuario","clave"}
+   └─ ServicioAutenticacion (@Stateless, @PermitAll) ── compara contra el hash PBKDF2 de la tabla usuarios
+   └─ ServicioJwt.emitir ── {"iss":"mediconecta","sub":"recepcion","groups":["RECEPCION"],"exp":...}
+                            firmado con HMAC-SHA256 (HS256)
+200 {"token":"eyJ...","tipo":"Bearer","expiraEnSegundos":7200,"roles":["RECEPCION"]}
+
+Cualquier otra llamada:  Authorization: Bearer eyJ...
+   └─ MecanismoAutenticacionJwt (HttpAuthenticationMechanism de Jakarta Security)
+        valida firma, algoritmo, emisor y vencimiento
+        └─ notifyContainerAboutLogin(usuario, roles)
+             └─ @RolesAllowed en los EJB, getCallerPrincipal(), isCallerInRole() — sin cambios
+```
+
+- **Lo que no cambió:** la autorización sigue declarada con `@RolesAllowed` sobre los métodos
+  de negocio y la aplica el contenedor de EJB. El JWT solo cambió *cómo llega la identidad*.
+  Por eso ninguno de los componentes de negocio se modificó para esta migración.
+- **Usuarios:** pasaron de `application-users.properties` de WildFly a la tabla `usuarios`
+  (contraseña con PBKDF2-HMAC-SHA256, 120 000 iteraciones y sal propia). Los cuatro usuarios
+  de demostración los crea `CargaDeDatosDemo` al desplegar.
+- **Secreto de firma:** propiedad del sistema `mediconecta.jwt.secreto` o variable
+  `MEDICONECTA_JWT_SECRETO`. Si falta, se usa uno de desarrollo y se avisa en el log.
+- **Defensas probadas en tests:** firma alterada, otro secreto, `"alg":"none"`, token vencido
+  y token mal formado → 401.
+- **Requisito en WildFly:** `integrated-jaspi=false` en el `application-security-domain`
+  "other" de Undertow (`scripts/wildfly/configurar-seguridad.cli`), para que el contenedor
+  acepte los roles que vienen en el token.
+- **Pantallas:** `/app/*` dejó de estar protegido en `web.xml` (el navegador no manda el
+  token al navegar entre páginas); son HTML sin datos. Los datos están en `/api/*`, que sí
+  exige token. Cada pantalla consulta `/api/sesion` al cargar y, sin token válido, vuelve al
+  login.
+- **Sesión HTTP:** sigue existiendo, pero solo para la conversación del asistente
+  `@Stateful`; ya no interviene en la autenticación.
+
+### 9.3 Patrón State en `Turno`
+
+```
+PROGRAMADO --cancelar--> CANCELADO --archivar--> CANCELADO (archivado)
+    |
+    +------atender-----> ATENDIDO          (cualquier otra transición -> 409 Conflict)
+```
+
+- `EstadoDelTurno` (interfaz State) con `TurnoProgramado`, `TurnoCancelado` y `TurnoAtendido`.
+  Por omisión toda transición lanza `TransicionInvalidaException`: cada estado sobreescribe
+  solo las que acepta, así que olvidarse de una regla nunca habilita una transición.
+- `Turno` es el *contexto*: `cancelar()`, `atender()` y `archivar()` delegan en
+  `estado.comportamiento()`. `EstadoTurno` sigue siendo el enum que se persiste y viaja en
+  el JSON; solo asocia cada valor con su objeto State.
+- `GestionTurnos` ya no tiene `if (estado == ...)`: verifica ownership y le pide la
+  transición al turno.
+- **409 y no 400:** `ManejadorTransicionInvalida` devuelve `409 Conflict`, porque el pedido
+  está bien formado pero choca con el estado actual del recurso. Las reglas de validación
+  (fecha en el pasado, superposición, especialidad incoherente) siguen siendo `400`.
+- **Operación nueva:** `PUT /api/turnos/{id}/atender` (MEDICO sobre su propia agenda, o
+  ADMIN). Era la limitación declarada de la Entrega 1 ("el estado ATENDIDO existe pero no hay
+  operación que lo asigne"). La pantalla de detalle del turno tiene el botón "Marcar
+  atendido".
+
+### 9.4 Tests unitarios
+
+`mvn test` corre 46 tests JUnit 5 sin contenedor ni base de datos. Los EJB se prueban como
+objetos Java comunes, con los **repositorios en memoria** (el mismo patrón DAO que habilita
+el plan B sin PostgreSQL) y un `SessionContext` simulado para el ownership.
+
+| Clase de test | Qué cubre |
+|---|---|
+| `EstadoDelTurnoTest` | todas las transiciones válidas e inválidas del patrón State |
+| `GestionTurnosTest` | fecha en el pasado, superposición, horario liberado al cancelar, ownership de paciente y médico, 409 al cancelar dos veces o un atendido, archivado |
+| `FabricaTurnosTest` | invariantes del Factory: PROGRAMADO, fecha truncada al minuto, especialidad coherente |
+| `ServicioJwtTest` | emisión y validación, vencimiento, firma alterada, otro secreto, `alg:none` |
+| `HashDeClavesTest` | PBKDF2: coincide, no coincide, sal distinta, hash mal formado |
+| `ServicioAutenticacionTest` | credenciales correctas e incorrectas, mismo mensaje para usuario inexistente, usuario inactivo |
+| `GestorCoberturaTest` | ruteo del Adapter: qué obra social va por SOAP y cuál por REST |
+
+Un test: `mvn test -Dtest=EstadoDelTurnoTest` (o `-Dtest=GestionTurnosTest#cancelarLiberaElHorario`).
+
+### 9.5 Defectos encontrados al desplegar la Entrega 2 por primera vez
+
+La §8 anterior advertía que esta entrega nunca se había desplegado. Al desplegarla aparecieron
+cuatro defectos, ya corregidos:
+
+1. **El WAR no desplegaba** (`WELD-001408` sobre `AdaptadorObraSocialPartner`): un EJB que
+   implementa una interfaz solo expone esa interfaz, y `GestorCobertura` inyecta los adapters
+   por su clase concreta. Se agregó `@LocalBean` a los dos adapters.
+2. **Ruteo de obra social:** la ficha guarda la cobertura con el plan ("OSDE 210"), y la
+   comparación era exacta contra "OSDE", así que todo iba al partner y daba "no vigente".
+   `GestorCobertura` ahora reconoce la obra social por el comienzo del texto.
+3. **URL del WSDL:** quedaba en `/ServicioObraSocialLegadoImpl?wsdl` y no en
+   `/ServicioObraSocialLegado?wsdl`; el adapter apuntaba a la segunda y fallaba con 502.
+4. **Script de datasource:** los `-D` que recibe `jboss-cli` no se aplicaban (faltaba
+   `--resolve-parameter-values`); el datasource siempre usaba los valores por omisión.
+
+### 9.6 Feedback del diseño
+
+> _Pendiente de completar: indicar acá qué observaciones hizo la cátedra sobre el diseño y
+> cómo se incorporó cada una._

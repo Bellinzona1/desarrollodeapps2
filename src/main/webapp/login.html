@@ -43,26 +43,25 @@
             <div id="mensaje" class="aviso aviso--error" role="alert" hidden></div>
 
             <!--
-                El formulario envía las credenciales a j_security_check, el punto
-                de entrada de la autenticación FORM del contenedor. Las valida
-                WildFly: la aplicación nunca ve la contraseña.
-                El action se recalcula por JavaScript para que funcione también
-                cuando el contenedor muestra esta página desviando otra URL.
+                login.js envía las credenciales a POST /api/auth/login, que
+                devuelve un JWT firmado con los roles del usuario. El token se
+                guarda en sessionStorage y viaja en la cabecera Authorization
+                de cada llamada a la API.
             -->
-            <form id="form-login" method="post" action="/mediconecta/j_security_check">
+            <form id="form-login" method="post" novalidate>
                 <div class="campo">
-                    <label for="j_username">Usuario</label>
-                    <input type="text" id="j_username" name="j_username"
+                    <label for="usuario">Usuario</label>
+                    <input type="text" id="usuario" name="usuario"
                            autocomplete="username" required autofocus>
                 </div>
 
                 <div class="campo">
-                    <label for="j_password">Contraseña</label>
-                    <input type="password" id="j_password" name="j_password"
+                    <label for="clave">Contraseña</label>
+                    <input type="password" id="clave" name="clave"
                            autocomplete="current-password" required>
                 </div>
 
-                <button type="submit" class="boton boton--ancho">Ingresar</button>
+                <button type="submit" class="boton boton--ancho" id="boton-ingresar">Ingresar</button>
             </form>
 
             <p class="campo__ayuda" style="margin-top:20px; text-align:center">

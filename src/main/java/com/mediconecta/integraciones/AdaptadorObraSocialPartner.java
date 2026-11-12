@@ -3,6 +3,7 @@ package com.mediconecta.integraciones;
 import com.mediconecta.integraciones.simulacion.RespuestaPartner;
 import com.mediconecta.negocio.IntegracionExternaException;
 
+import jakarta.ejb.LocalBean;
 import jakarta.ejb.Stateless;
 import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.client.Client;
@@ -17,6 +18,9 @@ import jakarta.ws.rs.core.Response;
  * {@code mediconecta.partner.baseUrl} porque en produccion apuntaria al
  * dominio real del partner, no al propio WAR de MediConecta.</p>
  */
+// @LocalBean: un EJB que implementa una interfaz solo expone esa interfaz;
+// GestorCobertura inyecta cada adaptador por su clase concreta para elegir cual usar.
+@LocalBean
 @Stateless
 public class AdaptadorObraSocialPartner implements ValidadorCobertura {
 

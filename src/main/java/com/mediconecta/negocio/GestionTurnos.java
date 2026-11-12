@@ -1,7 +1,6 @@
 package com.mediconecta.negocio;
 
 import com.mediconecta.datos.RepositorioTurnos;
-import com.mediconecta.modelo.EstadoTurno;
 import com.mediconecta.modelo.Paciente;
 import com.mediconecta.modelo.Profesional;
 import com.mediconecta.modelo.Turno;
@@ -80,7 +79,7 @@ public class GestionTurnos {
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public List<LocalDateTime> horariosOcupados(Long profesionalId, LocalDate fecha) {
         return repositorio.listarPorProfesionalYFecha(profesionalId, fecha).stream()
-                .filter(t -> t.getEstado() != EstadoTurno.CANCELADO)
+                .filter(Turno::ocupaHorario)
                 .map(Turno::getFechaHora)
                 .toList();
     }
@@ -131,16 +130,33 @@ public class GestionTurnos {
     public Turno cancelarTurno(Long id) {
         Turno turno = obtenerTurno(id);
 
-        if (turno.getEstado() == EstadoTurno.CANCELADO) {
-            throw new ReglaNegocioException("El turno " + id + " ya estaba cancelado.");
-        }
-        if (turno.getEstado() == EstadoTurno.ATENDIDO) {
-            throw new ReglaNegocioException("No se puede cancelar un turno que ya fue atendido.");
-        }
-
         exigirPuedeCancelar(turno);
 
-        turno.setEstado(EstadoTurno.CANCELADO);
+        // Patron State: el estado actual decide si admite la cancelacion. Si
+        // el turno ya estaba cancelado o atendido lanza
+        // TransicionInvalidaException, que la API devuelve como 409.
+        turno.cancelar();
+        return repositorio.actualizar(turno);
+    }
+
+    /**
+     * Registra que el paciente fue atendido: PROGRAMADO -> ATENDIDO.
+     *
+     * <p>Lo hace el MEDICO (solo sobre su propia agenda) o un ADMIN. Si el turno
+     * no esta PROGRAMADO, el estado rechaza la transicion con un 409.</p>
+     */
+    @RolesAllowed({Roles.MEDICO, Roles.ADMIN})
+    public Turno atenderTurno(Long id) {
+        Turno turno = obtenerTurno(id);
+
+        if (esSoloMedico()) {
+            String usuario = contexto.getCallerPrincipal().getName();
+            if (!usuario.equals(turno.getProfesional().getUsuario())) {
+                throw new ReglaNegocioException("Solo puede atender turnos de su propia agenda.");
+            }
+        }
+
+        turno.atender();
         return repositorio.actualizar(turno);
     }
 
@@ -186,14 +202,8 @@ public class GestionTurnos {
     public Turno archivarTurno(Long id) {
         Turno turno = obtenerTurno(id);
 
-        if (turno.getEstado() != EstadoTurno.CANCELADO) {
-            throw new ReglaNegocioException("Solo se pueden archivar turnos cancelados.");
-        }
-        if (turno.isArchivado()) {
-            throw new ReglaNegocioException("El turno " + id + " ya estaba archivado.");
-        }
-
-        turno.setArchivado(true);
+        // Solo TurnoCancelado acepta archivar, y una unica vez (409 si no).
+        turno.archivar();
         return repositorio.actualizar(turno);
     }
 }

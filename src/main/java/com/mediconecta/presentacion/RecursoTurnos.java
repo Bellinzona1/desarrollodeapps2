@@ -69,6 +69,13 @@ public class RecursoTurnos {
         return gestionTurnos.cancelarTurno(id);
     }
 
+    /** Registra la atencion: PROGRAMADO -> ATENDIDO (409 desde otro estado). */
+    @PUT
+    @Path("/{id}/atender")
+    public Turno atender(@PathParam("id") Long id) {
+        return gestionTurnos.atenderTurno(id);
+    }
+
     /** Saca un turno cancelado de la agenda operativa sin borrarlo. */
     @PUT
     @Path("/{id}/archivar")

@@ -3,13 +3,16 @@
      MediConecta - prueba de humo de la API
     =========================================================================
 
-     Recorre de punta a punta las funcionalidades de la Entrega 1 contra una
-     instancia ya desplegada. Verifica salud, turnos, pacientes, profesionales,
-     el asistente stateful y la seguridad por roles.
+     Recorre de punta a punta las funcionalidades contra una instancia ya
+     desplegada. Verifica salud, autenticacion JWT, seguridad por roles,
+     turnos (incluido el patron State: 409 ante transiciones invalidas),
+     pacientes, profesionales, cobertura (SOAP + REST), el asistente stateful
+     y, si se indica el log de WildFly, la mensajeria JMS.
 
      Uso:
          .\smoke-test.ps1
          .\smoke-test.ps1 -BaseUrl http://localhost:8080/mediconecta
+         .\smoke-test.ps1 -LogWildFly C:\wildfly-36.0.1.Final\standalone\log\server.log
 
      Devuelve codigo de salida 0 si todas las pruebas pasan, 1 si alguna falla.
      Escrito para Windows PowerShell 5.1 (el que trae Windows por defecto).
@@ -18,7 +21,9 @@
 
 param(
     [string] $BaseUrl = "http://localhost:8080/mediconecta",
-    [string] $Clave   = "Demo.2026"
+    [string] $Clave   = "Demo.2026",
+    # Opcional: con el server.log de WildFly se verifica tambien la mensajeria.
+    [string] $LogWildFly = ""
 )
 
 $ErrorActionPreference = "Continue"
@@ -83,21 +88,17 @@ function Invocar {
 }
 
 function Abrir-Sesion {
-    param([string] $Usuario)
+    param([string] $Usuario, [string] $ClaveUsada = $Clave)
 
+    # Login JWT: POST /api/auth/login devuelve el token. Se guarda en la
+    # cabecera Authorization de la WebRequestSession, asi viaja en todas las
+    # llamadas que usen esta sesion. La sesion ademas conserva la cookie
+    # JSESSIONID que necesita el asistente @Stateful.
     $sesion = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-
-    # Pedir un recurso protegido crea la sesion y hace que el contenedor guarde
-    # la peticion original; despues se envian las credenciales a j_security_check.
-    try {
-        Invoke-WebRequest -Uri "$BaseUrl/app/index.html" -WebSession $sesion -UseBasicParsing | Out-Null
-    } catch { }
-
-    try {
-        Invoke-WebRequest -Uri "$BaseUrl/j_security_check" -Method Post -WebSession $sesion `
-            -UseBasicParsing -Body @{ j_username = $Usuario; j_password = $Clave } | Out-Null
-    } catch { }
-
+    $login = Invocar -Metodo POST -Ruta "/api/auth/login" -Cuerpo @{ usuario = $Usuario; clave = $ClaveUsada } -Sesion $sesion
+    if ($login.Codigo -eq 200 -and $login.Datos.token) {
+        $sesion.Headers["Authorization"] = "Bearer " + $login.Datos.token
+    }
     return $sesion
 }
 
@@ -144,14 +145,26 @@ Titulo "SEGURIDAD"
 $sinSesion = Invocar -Metodo GET -Ruta "/api/turnos"
 Probar "Endpoint protegido sin iniciar sesion devuelve 401" ($sinSesion.Codigo -eq 401) "codigo=$($sinSesion.Codigo)"
 
+$loginMalo = Invocar -Metodo POST -Ruta "/api/auth/login" -Cuerpo @{ usuario = "recepcion"; clave = "incorrecta" }
+Probar "Login con contrasena incorrecta devuelve 401" ($loginMalo.Codigo -eq 401) "codigo=$($loginMalo.Codigo)"
+
+$loginBueno = Invocar -Metodo POST -Ruta "/api/auth/login" -Cuerpo @{ usuario = "recepcion"; clave = $Clave }
+Probar "Login correcto devuelve un JWT (tres partes)" ($loginBueno.Codigo -eq 200 -and ($loginBueno.Datos.token -split "\.").Count -eq 3) "codigo=$($loginBueno.Codigo)"
+Probar "El login informa los roles del usuario" ($loginBueno.Datos.roles -contains "RECEPCION")
+
 $recepcion = Abrir-Sesion -Usuario "recepcion"
 $medico    = Abrir-Sesion -Usuario "medico"
 $admin     = Abrir-Sesion -Usuario "admin"
 $paciente  = Abrir-Sesion -Usuario "paciente"
 
 $quien = Invocar -Metodo GET -Ruta "/api/sesion" -Sesion $recepcion
-Probar "Login FORM de 'recepcion' deja sesion activa" ($quien.Codigo -eq 200 -and $quien.Datos.usuario -eq "recepcion") "codigo=$($quien.Codigo)"
-Probar "La sesion de 'recepcion' tiene el rol RECEPCION" ($quien.Datos.roles -contains "RECEPCION")
+Probar "Con el JWT de 'recepcion' el servidor reconoce al usuario" ($quien.Codigo -eq 200 -and $quien.Datos.usuario -eq "recepcion") "codigo=$($quien.Codigo)"
+Probar "La identidad del token tiene el rol RECEPCION" ($quien.Datos.roles -contains "RECEPCION")
+
+$adulterada = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$adulterada.Headers["Authorization"] = $recepcion.Headers["Authorization"] + "x"
+$conTokenAdulterado = Invocar -Metodo GET -Ruta "/api/turnos" -Sesion $adulterada
+Probar "Un token con la firma alterada devuelve 401" ($conTokenAdulterado.Codigo -eq 401) "codigo=$($conTokenAdulterado.Codigo)"
 
 $agendaPaciente = Invocar -Metodo GET -Ruta "/api/turnos" -Sesion $paciente
 Probar "Un PACIENTE no puede ver la agenda completa (403)" ($agendaPaciente.Codigo -eq 403) "codigo=$($agendaPaciente.Codigo)"
@@ -317,7 +330,7 @@ $cancelado = Invocar -Metodo PUT -Ruta "/api/turnos/$idCreado/cancelar" -Sesion 
 Probar "PUT /api/turnos/{id}/cancelar cancela el turno" ($cancelado.Codigo -eq 200 -and $cancelado.Datos.estado -eq "CANCELADO") "codigo=$($cancelado.Codigo) estado=$($cancelado.Datos.estado)"
 
 $recancelado = Invocar -Metodo PUT -Ruta "/api/turnos/$idCreado/cancelar" -Sesion $recepcion
-Probar "Cancelar dos veces devuelve 400 con un mensaje claro" ($recancelado.Codigo -eq 400 -and $recancelado.Datos.error -like "*ya estaba cancelado*") "codigo=$($recancelado.Codigo)"
+Probar "Cancelar dos veces devuelve 409 (patron State) con un mensaje claro" ($recancelado.Codigo -eq 409 -and $recancelado.Datos.error -like "*ya estaba cancelado*") "codigo=$($recancelado.Codigo)"
 
 $reutilizado = Invocar -Metodo POST -Ruta "/api/turnos" -Cuerpo $pedido -Sesion $recepcion
 Probar "El horario de un turno cancelado vuelve a estar libre (201)" ($reutilizado.Codigo -eq 201) "codigo=$($reutilizado.Codigo) $($reutilizado.Texto)"
@@ -370,7 +383,7 @@ if ($turnoDeAna.Codigo -eq 201) {
     Probar "RECEPCION puede archivar un turno cancelado (200)" ($archivado.Codigo -eq 200 -and $archivado.Datos.archivado -eq $true) "codigo=$($archivado.Codigo) $($archivado.Texto)"
 
     $archivarDeNuevo = Invocar -Metodo PUT -Ruta "/api/turnos/$idTurnoAna/archivar" -Sesion $recepcion
-    Probar "Archivar dos veces devuelve 400" ($archivarDeNuevo.Codigo -eq 400) "codigo=$($archivarDeNuevo.Codigo)"
+    Probar "Archivar dos veces devuelve 409 (patron State)" ($archivarDeNuevo.Codigo -eq 409) "codigo=$($archivarDeNuevo.Codigo)"
 
     $agendaDespuesDeArchivar = Invocar -Metodo GET -Ruta "/api/turnos" -Sesion $recepcion
     $yaNoEstaEnAgenda = $true
@@ -409,6 +422,61 @@ $turnoDeLaura = Invocar -Metodo POST -Ruta "/api/turnos" -Sesion $recepcion -Cue
 if ($turnoDeLaura.Codigo -eq 201) {
     $medicoCancelaPropio = Invocar -Metodo PUT -Ruta "/api/turnos/$($turnoDeLaura.Datos.id)/cancelar" -Sesion $medico
     Probar "Un MEDICO puede cancelar un turno de su propia agenda (200)" ($medicoCancelaPropio.Codigo -eq 200) "codigo=$($medicoCancelaPropio.Codigo) $($medicoCancelaPropio.Texto)"
+}
+
+# ============================================================ PATRON STATE ===
+
+Titulo "PATRON STATE: TRANSICIONES DEL TURNO (409 ante una invalida)"
+
+$horarioState = $null
+for ($i = 1; $i -le 21; $i++) {
+    $f = (Get-Date).AddDays($i).ToString("yyyy-MM-dd")
+    $r = Invocar -Metodo GET -Ruta "/api/profesionales/$profesionalId/horarios-libres?fecha=$f" -Sesion $recepcion
+    if ($r.Codigo -eq 200 -and $r.Datos.Count -gt 1) { $horarioState = $r.Datos[1]; break }
+}
+$turnoState = Invocar -Metodo POST -Ruta "/api/turnos" -Sesion $recepcion -Cuerpo @{
+    documentoPaciente = $documento; profesionalId = $profesionalId; fechaHora = $horarioState
+}
+Probar "Se crea un turno PROGRAMADO para probar las transiciones" ($turnoState.Codigo -eq 201) "codigo=$($turnoState.Codigo) $($turnoState.Texto)"
+
+if ($turnoState.Codigo -eq 201) {
+    $idState = $turnoState.Datos.id
+
+    $archivarProgramado = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/archivar" -Sesion $recepcion
+    Probar "PROGRAMADO -> archivar es invalido (409)" ($archivarProgramado.Codigo -eq 409) "codigo=$($archivarProgramado.Codigo)"
+
+    $atenderRecepcion = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/atender" -Sesion $recepcion
+    Probar "RECEPCION no puede registrar la atencion (403)" ($atenderRecepcion.Codigo -eq 403) "codigo=$($atenderRecepcion.Codigo)"
+
+    $atendido = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/atender" -Sesion $medico
+    Probar "PROGRAMADO -> ATENDIDO lo hace el MEDICO de esa agenda (200)" ($atendido.Codigo -eq 200 -and $atendido.Datos.estado -eq "ATENDIDO") "codigo=$($atendido.Codigo) $($atendido.Texto)"
+
+    $atenderOtraVez = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/atender" -Sesion $medico
+    Probar "ATENDIDO -> atender es invalido (409)" ($atenderOtraVez.Codigo -eq 409) "codigo=$($atenderOtraVez.Codigo)"
+
+    $cancelarAtendido = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/cancelar" -Sesion $recepcion
+    Probar "ATENDIDO -> cancelar es invalido (409)" ($cancelarAtendido.Codigo -eq 409) "codigo=$($cancelarAtendido.Codigo)"
+    Probar "El 409 trae el formato de error de la API" ($cancelarAtendido.Datos.codigo -eq 409 -and $cancelarAtendido.Datos.error -like "*atendido*") "$($cancelarAtendido.Texto)"
+}
+
+# ========================================================= COBERTURA ========
+
+Titulo "COBERTURA: PATRON ADAPTER (SOAP legado + REST partner)"
+
+$coberturaLegado = Invocar -Metodo GET -Ruta "/api/pacientes/30111222/cobertura" -Sesion $recepcion
+Probar "OSDE se valida contra el sistema legado por SOAP" ($coberturaLegado.Codigo -eq 200 -and $coberturaLegado.Datos.origen -eq "LEGADO" -and $coberturaLegado.Datos.vigente) "codigo=$($coberturaLegado.Codigo) $($coberturaLegado.Texto)"
+
+$coberturaPartner = Invocar -Metodo GET -Ruta "/api/pacientes/28999888/cobertura" -Sesion $recepcion
+Probar "Swiss Medical se valida contra el partner por REST" ($coberturaPartner.Codigo -eq 200 -and $coberturaPartner.Datos.origen -eq "PARTNER" -and $coberturaPartner.Datos.vigente) "codigo=$($coberturaPartner.Codigo) $($coberturaPartner.Texto)"
+
+$coberturaAjena = Invocar -Metodo GET -Ruta "/api/pacientes/28999888/cobertura" -Sesion $paciente
+Probar "Un PACIENTE no puede consultar la cobertura de otro (400)" ($coberturaAjena.Codigo -eq 400) "codigo=$($coberturaAjena.Codigo)"
+
+try {
+    $wsdl = Invoke-WebRequest -Uri "$BaseUrl/ServicioObraSocialLegadoImpl?wsdl" -UseBasicParsing
+    Probar "El WSDL del sistema legado esta publicado" ([int]$wsdl.StatusCode -eq 200 -and $wsdl.Content -match "definitions")
+} catch {
+    Probar "El WSDL del sistema legado esta publicado" $false $_.Exception.Message
 }
 
 # ================================================== ASISTENTE STATEFUL =======
@@ -474,6 +542,29 @@ Probar "Un PACIENTE no puede ver el historial de otro (400)" ($historialAjeno.Co
 
 $historialPropio = Invocar -Metodo GET -Ruta "/api/pacientes/30111222/turnos" -Sesion $paciente
 Probar "Un PACIENTE si puede ver su propio historial" ($historialPropio.Codigo -eq 200) "codigo=$($historialPropio.Codigo)"
+
+# ============================================================== MENSAJERIA ==
+
+if ($LogWildFly -and (Test-Path $LogWildFly)) {
+    Titulo "MENSAJERIA JMS (cola + topico, leida del log de WildFly)"
+
+    # El turno de la reserva guiada se confirmo arriba: su id tiene que
+    # aparecer en el log de los tres consumidores (los MDB son asincronicos,
+    # por eso se espera unos segundos).
+    $idJms = $confirmado.Datos.turnoId
+    $cola = $false; $topicoPaciente = $false; $topicoProfesional = $false
+    for ($i = 0; $i -lt 10 -and -not ($cola -and $topicoPaciente -and $topicoProfesional); $i++) {
+        Start-Sleep -Seconds 1
+        $lineas = Get-Content $LogWildFly -Tail 400
+        $delTurno          = $lineas | Select-String -SimpleMatch "Turno ${idJms}:"
+        $cola              = [bool]($delTurno | Select-String -SimpleMatch "[JMS-COLA]")
+        $topicoPaciente    = [bool]($delTurno | Select-String -SimpleMatch "recordatorio para el paciente")
+        $topicoProfesional = [bool]($delTurno | Select-String -SimpleMatch "recordatorio para el profesional")
+    }
+    Probar "La cola entrego la confirmacion del turno $idJms" $cola
+    Probar "El topico entrego el recordatorio al suscriptor del paciente" $topicoPaciente
+    Probar "El topico entrego el recordatorio al suscriptor del profesional" $topicoProfesional
+}
 
 # =================================================================== CIERRE ==
 
