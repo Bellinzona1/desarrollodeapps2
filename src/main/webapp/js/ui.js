@@ -67,12 +67,137 @@ export function fechaLarga(fechaHora) {
         + MESES[momento.getMonth()] + ', ' + hora(fechaHora);
 }
 
+/** Una fecha local en formato aaaa-MM-dd. */
+function aIso(momento) {
+    const mes = String(momento.getMonth() + 1).padStart(2, '0');
+    const dia = String(momento.getDate()).padStart(2, '0');
+    return momento.getFullYear() + '-' + mes + '-' + dia;
+}
+
+/** "2026-11-17" -> Date local (sin corrimiento por zona horaria). */
+function deIso(fechaIso) {
+    const [anio, mes, dia] = fechaIso.split('-').map(Number);
+    return new Date(anio, mes - 1, dia);
+}
+
 /** Fecha de hoy en formato aaaa-MM-dd, lista para un <input type="date">. */
 export function hoyIso() {
-    const hoy = new Date();
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const dia = String(hoy.getDate()).padStart(2, '0');
-    return hoy.getFullYear() + '-' + mes + '-' + dia;
+    return aIso(new Date());
+}
+
+/** "2026-11-17" -> "mar 17 nov" */
+export function fechaCorta(fechaIso) {
+    const momento = deIso(fechaIso);
+    return DIAS[momento.getDay()].substring(0, 3) + ' ' + momento.getDate() + ' ' + MESES[momento.getMonth()];
+}
+
+/* -------------------- Dias de atencion de un profesional -------------------- */
+
+// Indice de Date.getDay() (0 = domingo) -> valor de java.time.DayOfWeek.
+const DIAS_JAVA = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+
+/** true si alguna franja de la disponibilidad semanal cae ese dia. */
+export function atiendeEseDia(disponibilidad, fechaIso) {
+    const dia = DIAS_JAVA[deIso(fechaIso).getDay()];
+    return (disponibilidad || []).some(franja => franja.diaSemana === dia);
+}
+
+/** Las proximas fechas (aaaa-MM-dd), desde hoy, en las que el profesional atiende. */
+export function proximosDiasDeAtencion(disponibilidad, cantidad = 6) {
+    const dias = new Set((disponibilidad || []).map(franja => franja.diaSemana));
+    const resultado = [];
+    const cursor = new Date();
+    for (let i = 0; i < 90 && dias.size > 0 && resultado.length < cantidad; i++) {
+        if (dias.has(DIAS_JAVA[cursor.getDay()])) {
+            resultado.push(aIso(cursor));
+        }
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return resultado;
+}
+
+/**
+ * Disponibilidad semanal en palabras, agrupando los dias que comparten
+ * horario: "lunes a viernes, de 09:00 a 13:00" o
+ * "martes y jueves, de 10:00 a 16:00".
+ */
+export function textoDisponibilidad(disponibilidad) {
+    const orden = DIAS_SEMANA.map(d => d.valor);
+    const grupos = new Map();
+    [...(disponibilidad || [])]
+        .sort((a, b) => orden.indexOf(a.diaSemana) - orden.indexOf(b.diaSemana))
+        .forEach(franja => {
+            const clave = franja.horaDesde.substring(0, 5) + ' a ' + franja.horaHasta.substring(0, 5);
+            if (!grupos.has(clave)) {
+                grupos.set(clave, []);
+            }
+            grupos.get(clave).push(orden.indexOf(franja.diaSemana));
+        });
+
+    return [...grupos.entries()]
+        .map(([horario, indices]) => listaDeDias(indices) + ', de ' + horario)
+        .join('; ');
+}
+
+/** [0, 1, 2, 3, 4] -> "lunes a viernes"; [1, 3] -> "martes y jueves". */
+function listaDeDias(indices) {
+    const nombre = (indice) => DIAS_SEMANA[indice].texto.toLowerCase();
+    const tramos = [];
+    let inicio = 0;
+    for (let i = 1; i <= indices.length; i++) {
+        if (i === indices.length || indices[i] !== indices[i - 1] + 1) {
+            const tramo = indices.slice(inicio, i);
+            if (tramo.length >= 3) {
+                tramos.push(nombre(tramo[0]) + ' a ' + nombre(tramo[tramo.length - 1]));
+            } else {
+                tramo.forEach(indice => tramos.push(nombre(indice)));
+            }
+            inicio = i;
+        }
+    }
+    return tramos.length > 1
+        ? tramos.slice(0, -1).join(', ') + ' y ' + tramos[tramos.length - 1]
+        : tramos.join('');
+}
+
+/**
+ * Cuantos horarios libres tiene cada dia, consultados en paralelo.
+ * libres = null si la consulta de ese dia fallo.
+ */
+export async function lugaresPorDia(dias, horariosDelDia) {
+    return Promise.all(dias.map(async (dia) => {
+        try {
+            return { dia, libres: (await horariosDelDia(dia)).length };
+        } catch (error) {
+            return { dia, libres: null };
+        }
+    }));
+}
+
+/** Botones de los proximos dias de atencion; los que no tienen lugar quedan deshabilitados. */
+export function htmlDiasDeAtencion(lugares, diaElegido) {
+    return '<div class="dias-atencion" role="group" aria-label="Próximos días de atención">'
+        + lugares.map(({ dia, libres }) => {
+            const completo = libres === 0;
+            const detalle = completo ? 'Completo'
+                : libres === null ? '' : libres + (libres === 1 ? ' horario' : ' horarios');
+            return '<button type="button" class="dia-atencion'
+                + (dia === diaElegido ? ' dia-atencion--elegido' : '') + '" data-dia="' + esc(dia) + '"'
+                + (completo ? ' disabled' : '') + ' aria-pressed="' + (dia === diaElegido) + '">'
+                + '<span>' + esc(fechaCorta(dia)) + '</span>'
+                + (detalle ? '<small>' + esc(detalle) + '</small>' : '')
+                + '</button>';
+        }).join('')
+        + '</div>';
+}
+
+/** Marca como elegido el boton de ese dia (si esta entre los proximos). */
+export function marcarDiaElegido(contenedor, dia) {
+    contenedor.querySelectorAll('.dia-atencion').forEach(boton => {
+        const elegido = boton.dataset.dia === dia;
+        boton.classList.toggle('dia-atencion--elegido', elegido);
+        boton.setAttribute('aria-pressed', String(elegido));
+    });
 }
 
 export function etiquetaEstado(estado) {

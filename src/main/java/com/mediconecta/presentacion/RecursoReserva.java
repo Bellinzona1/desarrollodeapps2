@@ -1,5 +1,7 @@
 package com.mediconecta.presentacion;
 
+import com.mediconecta.integraciones.GestorOrientacion;
+import com.mediconecta.integraciones.SugerenciaEspecialidad;
 import com.mediconecta.negocio.EstadoReserva;
 import com.mediconecta.negocio.Fechas;
 
@@ -33,6 +35,9 @@ public class RecursoReserva {
     @Inject
     private ConversacionDeReserva conversacion;
 
+    @Inject
+    private GestorOrientacion gestorOrientacion;
+
     /** Estado actual de la conversacion, tal como lo recuerda el servidor. */
     @GET
     public EstadoReserva estado() {
@@ -50,6 +55,17 @@ public class RecursoReserva {
     @Path("/especialidad")
     public EstadoReserva elegirEspecialidad(PasoReserva paso) {
         return conversacion.asistente().elegirEspecialidad(paso == null ? null : paso.getEspecialidad());
+    }
+
+    /**
+     * Orientacion con IA para el paso 1: recibe la conversacion y devuelve la
+     * especialidad sugerida. No toca la conversacion stateful: elegir la
+     * especialidad sugerida sigue siendo {@code PUT /especialidad}.
+     */
+    @POST
+    @Path("/orientacion")
+    public SugerenciaEspecialidad orientar(PedidoOrientacion pedido) {
+        return gestorOrientacion.sugerirEspecialidad(pedido == null ? null : pedido.getMensajes());
     }
 
     @PUT

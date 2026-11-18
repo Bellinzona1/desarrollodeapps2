@@ -9,9 +9,16 @@
 
 import { api, contexto } from './api.js';
 import { iniciarLayout, tieneRol, reportar } from './layout.js';
-import { esc, hora, hoyIso, fechaLarga, avisoExito, mensajeEnCaja } from './ui.js';
+import {
+    esc, hora, hoyIso, fechaLarga, avisoExito, mensajeEnCaja,
+    atiendeEseDia, proximosDiasDeAtencion, textoDisponibilidad, lugaresPorDia,
+    htmlDiasDeAtencion, marcarDiaElegido
+} from './ui.js';
 
 const elegido = { documento: null, nombre: null, especialidad: null, profesionalId: null, profesional: null, fechaHora: null };
+
+// Disponibilidad semanal de cada profesional de la especialidad elegida, por id.
+const agendas = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -79,7 +86,9 @@ async function cargarProfesionales(especialidad) {
     }
 
     const profesionales = await api.profesionales(especialidad);
+    agendas.clear();
     profesionales.filter(p => p.activo).forEach(p => {
+        agendas.set(String(p.id), p.disponibilidades || []);
         const opcion = document.createElement('option');
         opcion.value = p.id;
         opcion.textContent = p.nombre + ' — Mat. ' + p.matricula;
@@ -95,10 +104,62 @@ function limpiarHorarios(mensaje) {
     resumen();
 }
 
+/**
+ * Muestra que dias atiende el profesional elegido y botones con los proximos,
+ * y arranca en el primero que todavia tiene lugar.
+ */
+async function mostrarDiasDeAtencion() {
+    const caja = $('dias-atencion');
+    const id = elegido.profesionalId;
+    const disponibilidad = agendas.get(String(id)) || [];
+
+    if (!id) {
+        caja.innerHTML = '<p class="campo__ayuda">Elegí un profesional para ver qué días atiende.</p>';
+        return;
+    }
+    if (disponibilidad.length === 0) {
+        caja.innerHTML = '<p class="campo__ayuda">' + esc(elegido.profesional)
+            + ' todavía no tiene días de atención cargados.</p>';
+        return;
+    }
+
+    caja.innerHTML = '<div class="cargando">Buscando los días de atención...</div>';
+    const lugares = await lugaresPorDia(proximosDiasDeAtencion(disponibilidad),
+        (dia) => api.horariosLibres(id, dia));
+    if (elegido.profesionalId !== id) {
+        return; // mientras tanto se eligio otro profesional
+    }
+
+    const primero = lugares.find(l => l.libres > 0);
+    caja.innerHTML = '<p class="campo__ayuda" style="margin-bottom:8px">' + esc(elegido.profesional)
+        + ' atiende ' + esc(textoDisponibilidad(disponibilidad)) + '.</p>'
+        + htmlDiasDeAtencion(lugares, primero ? primero.dia : null);
+
+    caja.querySelectorAll('.dia-atencion').forEach(boton => {
+        boton.addEventListener('click', () => {
+            $('fecha').value = boton.dataset.dia;
+            marcarDiaElegido(caja, boton.dataset.dia);
+            cargarHorarios();
+        });
+    });
+
+    if (primero) {
+        $('fecha').value = primero.dia;
+        cargarHorarios();
+    }
+}
+
 async function cargarHorarios() {
     const fecha = $('fecha').value;
     if (!elegido.profesionalId || !fecha) {
         limpiarHorarios('Elegí profesional y fecha para ver los horarios libres.');
+        return;
+    }
+
+    const disponibilidad = agendas.get(String(elegido.profesionalId)) || [];
+    if (disponibilidad.length > 0 && !atiendeEseDia(disponibilidad, fecha)) {
+        limpiarHorarios(elegido.profesional + ' no atiende ese día. Atiende '
+            + textoDisponibilidad(disponibilidad) + '.');
         return;
     }
 
@@ -114,7 +175,7 @@ async function cargarHorarios() {
     }
 
     if (horarios.length === 0) {
-        limpiarHorarios('No hay horarios libres ese día. Probá con otra fecha.');
+        limpiarHorarios('No quedan horarios libres ese día. Probá con otro de los días de atención.');
         return;
     }
 
@@ -176,6 +237,8 @@ async function iniciar() {
         elegido.profesionalId = null;
         elegido.profesional = null;
         $('fecha').disabled = true;
+        $('fecha').value = '';
+        mostrarDiasDeAtencion();
         limpiarHorarios('Elegí profesional y fecha para ver los horarios libres.');
         try {
             await cargarProfesionales(elegido.especialidad);
@@ -190,11 +253,16 @@ async function iniciar() {
         elegido.profesionalId = e.target.value || null;
         elegido.profesional = (opcion && opcion.value) ? opcion.textContent.split(' — ')[0] : null;
         $('fecha').disabled = !elegido.profesionalId;
+        $('fecha').value = '';
         limpiarHorarios('Elegí una fecha para ver los horarios libres.');
         resumen();
+        mostrarDiasDeAtencion();
     });
 
-    $('fecha').addEventListener('change', cargarHorarios);
+    $('fecha').addEventListener('change', () => {
+        marcarDiaElegido($('dias-atencion'), $('fecha').value);
+        cargarHorarios();
+    });
 
     $('form-turno').addEventListener('submit', async (evento) => {
         evento.preventDefault();

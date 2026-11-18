@@ -155,6 +155,7 @@ export const api = {
     reservaEstado: () => pedir('GET', '/reserva'),
     reservaIniciar: (documentoPaciente) => pedir('POST', '/reserva/iniciar', { documentoPaciente }),
     reservaEspecialidad: (especialidad) => pedir('PUT', '/reserva/especialidad', { especialidad }),
+    reservaOrientacion: (mensajes) => pedir('POST', '/reserva/orientacion', { mensajes }),
     reservaProfesional: (profesionalId) => pedir('PUT', '/reserva/profesional', { profesionalId }),
     reservaHorario: (fechaHora) => pedir('PUT', '/reserva/horario', { fechaHora }),
     reservaVolver: () => pedir('PUT', '/reserva/volver'),

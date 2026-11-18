@@ -37,7 +37,9 @@ interfaz web que sigue el prototipo de Figma.
   disponibilidad semanal — RECEPCION y ADMIN sobre cualquier profesional, un MEDICO solo
   sobre la suya propia.
 - **Reserva guiada en pasos**, cuyo estado intermedio vive en un EJB `@Stateful`
-  del servidor y no en el navegador.
+  del servidor y no en el navegador. En el primer paso, la opción **Prefiero escribirlo**
+  abre un chat: la persona cuenta qué le pasa y un asistente de IA le sugiere la
+  especialidad, con un botón para elegirla (ver [Asistente de IA](#asistente-de-ia-opcional)).
 - Interfaz **responsive**: barra lateral en escritorio, navegación inferior en teléfono.
 
 ### Componentes implementados
@@ -157,6 +159,28 @@ Opcional: el secreto con el que se firman los JWT se fija con la propiedad del s
 -Dmediconecta.jwt.secreto=...`, al menos 32 caracteres) o la variable de entorno
 `MEDICONECTA_JWT_SECRETO`. Sin ella se usa un secreto de desarrollo y el log lo advierte.
 **No hay ninguna credencial de base de datos dentro del código Java versionado.**
+
+#### Asistente de IA (opcional)
+
+El chat **Prefiero escribirlo** del primer paso de la reserva usa un modelo de lenguaje a
+través de la API de [Groq](https://console.groq.com/keys). La clave **nunca** va en el
+código ni en el navegador: la lee el servidor de la variable de entorno
+`MEDICONECTA_IA_CLAVE` o de la propiedad del sistema `mediconecta.ia.clave`.
+
+```bash
+# Linux / macOS: agregar al final de <wildfly>/bin/standalone.conf y reiniciar WildFly
+export MEDICONECTA_IA_CLAVE="gsk_..."
+```
+
+```powershell
+# Windows: agregar al final de <wildfly>\bin\standalone.conf.bat y reiniciar WildFly
+set "MEDICONECTA_IA_CLAVE=gsk_..."
+```
+
+Opcionales: `mediconecta.ia.modelo` (por omisión `openai/gpt-oss-120b`) y
+`mediconecta.ia.url` (por omisión la API de Groq; cualquier API compatible con el formato
+*chat completions* de OpenAI sirve). Sin clave, el resto de la aplicación funciona igual y
+el chat responde que el asistente no está configurado.
 
 ### Paso 3 — Compilar
 
@@ -293,6 +317,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | GET | `/api/reserva` | PACIENTE, RECEPCION, ADMIN | Estado actual **según lo recuerda el servidor** |
 | POST | `/api/reserva/iniciar` | ídem | Paso 0: identifica al paciente |
 | PUT | `/api/reserva/especialidad` | ídem | Paso 1 |
+| POST | `/api/reserva/orientacion` | ídem | Paso 1 con IA: recibe `{"mensajes":[{"rol":"usuario","texto":"..."}]}` y devuelve `{"mensaje","especialidad","urgente"}`. Solo sugiere especialidades con profesionales activos; elegirla sigue siendo `PUT /especialidad`. `502` si el proveedor de IA no responde |
 | PUT | `/api/reserva/profesional` | ídem | Paso 2 |
 | GET | `/api/reserva/horarios?fecha=…` | ídem | Horarios libres del profesional **ya recordado** |
 | PUT | `/api/reserva/horario` | ídem | Paso 3 |
@@ -386,7 +411,7 @@ mediconecta/
         ├── js/                               módulos ES: api, ui, layout y uno por pantalla
         ├── app/                              pantallas protegidas
         └── WEB-INF/web.xml · jboss-web.xml · beans.xml
-src/test/java/                                46 tests unitarios JUnit 5
+src/test/java/                                58 tests unitarios JUnit 5
 ```
 
 ---
@@ -396,13 +421,13 @@ src/test/java/                                46 tests unitarios JUnit 5
 ### Tests unitarios (sin servidor ni base de datos)
 
 ```powershell
-mvn test                                                  # los 46
+mvn test                                                  # los 58
 mvn test -Dtest=EstadoDelTurnoTest                        # una clase
 mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
 ```
 
 Cubren el patrón State, las reglas de `GestionTurnos`, el Factory, la emisión y validación
-de JWT, el hash de contraseñas, la autenticación y el ruteo del Adapter de cobertura. Los EJB
+de JWT, el hash de contraseñas, la autenticación, el ruteo del Adapter de cobertura y las reglas del asistente de IA (sin llamar al proveedor). Los EJB
 se prueban como objetos comunes con los repositorios en memoria.
 
 ### Prueba de humo (contra la aplicación desplegada)
