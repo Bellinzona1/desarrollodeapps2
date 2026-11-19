@@ -36,6 +36,10 @@
         <class>com.mediconecta.datos.memoria.RepositorioPacientesEnMemoria</class>
         <class>com.mediconecta.datos.memoria.RepositorioProfesionalesEnMemoria</class>
         <class>com.mediconecta.datos.memoria.RepositorioUsuariosEnMemoria</class>
+        <class>com.mediconecta.datos.memoria.RepositorioIdempotenciaEnMemoria</class>
+        <class>com.mediconecta.datos.memoria.RepositorioNotificacionesEnMemoria</class>
+        <class>com.mediconecta.datos.memoria.RepositorioMensajesFallidosEnMemoria</class>
+        <class>com.mediconecta.datos.memoria.SondaBaseDeDatosEnMemoria</class>
     </alternatives>
     -->
 

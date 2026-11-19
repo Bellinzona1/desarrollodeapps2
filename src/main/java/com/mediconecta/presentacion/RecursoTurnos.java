@@ -1,12 +1,16 @@
 package com.mediconecta.presentacion;
 
+import com.mediconecta.modelo.Notificacion;
 import com.mediconecta.modelo.Turno;
 import com.mediconecta.negocio.FachadaReservas;
+import com.mediconecta.negocio.GestionNotificaciones;
 import com.mediconecta.negocio.GestionTurnos;
+import com.mediconecta.negocio.ResultadoReserva;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -38,6 +42,13 @@ public class RecursoTurnos {
     @Inject
     private FachadaReservas fachadaReservas;
 
+    @Inject
+    private GestionNotificaciones gestionNotificaciones;
+
+    static final String CABECERA_IDEMPOTENCIA = "Idempotency-Key";
+
+    static final String CABECERA_REPETIDA = "Idempotent-Replayed";
+
     @Context
     private UriInfo uriInfo;
 
@@ -52,15 +63,35 @@ public class RecursoTurnos {
         return gestionTurnos.obtenerTurno(id);
     }
 
+    /**
+     * Alta de un turno. Acepta la cabecera opcional {@code Idempotency-Key}: si
+     * el mismo pedido llega dos veces con la misma clave (reintento por un
+     * corte de red, doble clic), el segundo devuelve el turno del primero con
+     * {@code Idempotent-Replayed: true} en lugar de crear otro. Las reglas estan
+     * en {@link FachadaReservas#reservarConClave}.
+     */
     @POST
-    public Response crear(PedidoTurno pedido) {
-        Turno creado = fachadaReservas.reservar(pedido == null ? null : pedido.aSolicitud());
+    public Response crear(PedidoTurno pedido, @HeaderParam(CABECERA_IDEMPOTENCIA) String clave) {
+        ResultadoReserva resultado = fachadaReservas.reservarConClave(
+                pedido == null ? null : pedido.aSolicitud(), clave);
+        Turno creado = resultado.turno();
 
         URI ubicacion = uriInfo.getAbsolutePathBuilder()
                 .path(String.valueOf(creado.getId()))
                 .build();
 
-        return Response.created(ubicacion).entity(creado).build();
+        Response.ResponseBuilder respuesta = Response.created(ubicacion).entity(creado);
+        if (resultado.repetida()) {
+            respuesta.header(CABECERA_REPETIDA, "true");
+        }
+        return respuesta.build();
+    }
+
+    /** Avisos que generaron los consumidores JMS para este turno. */
+    @GET
+    @Path("/{id}/notificaciones")
+    public List<Notificacion> notificaciones(@PathParam("id") Long id) {
+        return gestionNotificaciones.notificacionesDeTurno(id);
     }
 
     @PUT

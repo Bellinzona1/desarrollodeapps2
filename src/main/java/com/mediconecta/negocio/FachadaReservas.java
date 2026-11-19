@@ -1,21 +1,28 @@
 package com.mediconecta.negocio;
 
+import com.mediconecta.datos.RepositorioIdempotencia;
 import com.mediconecta.mensajeria.NotificadorTurnos;
+import com.mediconecta.modelo.ClaveIdempotencia;
 import com.mediconecta.modelo.EstadoTurno;
 import com.mediconecta.modelo.Paciente;
 import com.mediconecta.modelo.Profesional;
 import com.mediconecta.modelo.Turno;
 
+import jakarta.annotation.Resource;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.ejb.SessionContext;
 import jakarta.ejb.Stateless;
 import jakarta.ejb.TransactionAttribute;
 import jakarta.ejb.TransactionAttributeType;
 import jakarta.inject.Inject;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Patron Facade: unica puerta de entrada al caso de uso "reservar un turno".
@@ -51,6 +58,18 @@ public class FachadaReservas {
 
     @Inject
     private NotificadorTurnos notificadorTurnos;
+
+    @Inject
+    private RepositorioIdempotencia repositorioIdempotencia;
+
+    @Resource
+    private SessionContext contexto;
+
+    /** Cuanto tiempo protege una {@code Idempotency-Key} contra reintentos. */
+    public static final Duration VIGENCIA_CLAVE = Duration.ofHours(24);
+
+    /** Formato aceptado para la clave: el de un UUID o cualquier token similar. */
+    private static final Pattern FORMATO_CLAVE = Pattern.compile("[A-Za-z0-9._:-]{8,100}");
 
     // ---------- Consultas que alimentan la pantalla de reserva ----------
 
@@ -149,6 +168,82 @@ public class FachadaReservas {
         notificadorTurnos.turnoConfirmado(turno);
 
         return turno;
+    }
+
+    /**
+     * Reserva con proteccion contra reintentos ({@code Idempotency-Key}).
+     *
+     * <p>Una red inestable o un doble clic pueden hacer que el mismo
+     * {@code POST /api/turnos} llegue dos veces. Si el cliente manda la misma
+     * clave en los dos, el segundo no crea otro turno: recibe el que se creo con
+     * el primero. Reglas (basadas en el borrador IETF
+     * "The Idempotency-Key HTTP Header Field"):</p>
+     * <ul>
+     *   <li>sin clave, es una reserva comun ({@link #reservar});</li>
+     *   <li>misma clave y mismo pedido, dentro de {@link #VIGENCIA_CLAVE}: se
+     *       devuelve el turno ya creado, marcado como repetido;</li>
+     *   <li>misma clave y <b>otro</b> pedido: {@code 422}, es un error del
+     *       cliente;</li>
+     *   <li>dos pedidos simultaneos con la misma clave: el segundo recibe
+     *       {@code 409} y su turno se deshace junto con sus mensajes JMS.</li>
+     * </ul>
+     *
+     * <p>La clave es por usuario: dos usuarios distintos pueden usar la misma sin
+     * pisarse, y nadie puede "recuperar" el turno de otro adivinando su clave.</p>
+     */
+    @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.ADMIN})
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public ResultadoReserva reservarConClave(SolicitudTurno solicitud, String claveRecibida) {
+        String clave = normalizarClave(claveRecibida);
+        if (clave == null) {
+            return new ResultadoReserva(reservar(solicitud), false);
+        }
+        if (solicitud == null) {
+            throw new ReglaNegocioException("Debe enviar los datos del turno.");
+        }
+
+        String usuario = contexto.getCallerPrincipal().getName();
+        String huella = HuellaSolicitud.de(solicitud);
+        LocalDateTime ahora = LocalDateTime.now();
+
+        Optional<ClaveIdempotencia> previa = repositorioIdempotencia.buscar(usuario, clave);
+        if (previa.isPresent()) {
+            ClaveIdempotencia registrada = previa.get();
+            if (registrada.getCreadaEn().isBefore(ahora.minus(VIGENCIA_CLAVE))) {
+                repositorioIdempotencia.eliminar(registrada);
+            } else if (!registrada.getHuella().equals(huella)) {
+                throw new ConflictoIdempotenciaException(ConflictoIdempotenciaException.Motivo.PEDIDO_DISTINTO,
+                        "Esa Idempotency-Key ya se uso para otro pedido. Genere una clave nueva para cada turno.");
+            } else {
+                return new ResultadoReserva(registrada.getTurno(), true);
+            }
+        }
+
+        Turno turno = reservar(solicitud);
+        if (!repositorioIdempotencia.registrar(new ClaveIdempotencia(clave, usuario, huella, turno, ahora))) {
+            throw new ConflictoIdempotenciaException(ConflictoIdempotenciaException.Motivo.EN_CURSO,
+                    "Otro pedido con la misma Idempotency-Key se esta procesando. Reintente en unos segundos.");
+        }
+        return new ResultadoReserva(turno, false);
+    }
+
+    /**
+     * Acepta la clave tal cual o entre comillas (forma de "structured field"
+     * de la especificacion). Devuelve {@code null} si no vino.
+     */
+    static String normalizarClave(String clave) {
+        if (clave == null || clave.isBlank()) {
+            return null;
+        }
+        String limpia = clave.trim();
+        if (limpia.length() >= 2 && limpia.startsWith("\"") && limpia.endsWith("\"")) {
+            limpia = limpia.substring(1, limpia.length() - 1);
+        }
+        if (!FORMATO_CLAVE.matcher(limpia).matches()) {
+            throw new ReglaNegocioException("La cabecera Idempotency-Key debe tener entre 8 y 100 caracteres "
+                    + "(letras, numeros, '.', '_', ':' o '-'). Se recomienda un UUID.");
+        }
+        return limpia;
     }
 
     private Paciente resolverPaciente(SolicitudTurno solicitud) {

@@ -40,13 +40,29 @@ export class ErrorApi extends Error {
     }
 }
 
-async function pedir(metodo, ruta, cuerpo) {
+/**
+ * Clave para la cabecera Idempotency-Key: un UUID v4. crypto.randomUUID solo
+ * existe en contextos seguros (https o localhost); si no esta, se arma el UUID
+ * con crypto.getRandomValues, que existe en todos lados.
+ */
+export function nuevaClaveIdempotencia() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    const b = window.crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+}
+
+async function pedir(metodo, ruta, cuerpo, cabecerasExtra) {
     const opciones = {
         method: metodo,
-        headers: {
+        headers: Object.assign({
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest'
-        },
+        }, cabecerasExtra || {}),
         // La cookie de sesion sigue viajando: la necesita la conversacion del
         // asistente @Stateful. La identidad, en cambio, va en el token.
         credentials: 'same-origin'
@@ -94,11 +110,15 @@ async function pedir(metodo, ruta, cuerpo) {
         }
     }
 
+    // Los errores llegan en Problem Details (RFC 9457): "detail" es el texto
+    // para la persona y "type" identifica el error.
     if (!respuesta.ok) {
-        const mensaje = (datos && datos.error)
-            ? datos.error
+        const mensaje = (datos && (datos.detail || datos.title))
+            ? (datos.detail || datos.title)
             : 'El servidor respondio con un error (' + respuesta.status + ').';
-        throw new ErrorApi(mensaje, respuesta.status);
+        const error = new ErrorApi(mensaje, respuesta.status);
+        error.tipo = datos && datos.type ? datos.type : null;
+        throw error;
     }
 
     return datos;
@@ -124,7 +144,9 @@ export const api = {
     // Turnos
     turnos: () => pedir('GET', '/turnos'),
     turno: (id) => pedir('GET', '/turnos/' + encodeURIComponent(id)),
-    crearTurno: (pedido) => pedir('POST', '/turnos', pedido),
+    crearTurno: (pedido, claveIdempotencia) => pedir('POST', '/turnos', pedido,
+        claveIdempotencia ? { 'Idempotency-Key': claveIdempotencia } : undefined),
+    notificacionesDeTurno: (id) => pedir('GET', '/turnos/' + encodeURIComponent(id) + '/notificaciones'),
     cancelarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/cancelar'),
     atenderTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/atender'),
     archivarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/archivar'),

@@ -14,6 +14,13 @@ import jakarta.jms.JMSDestinationDefinitions;
  * el proyecto hasta ahora no lo trae). Ver docs/Entrega_Obligatoria_2.md,
  * seccion de mensajeria asincronica, para el detalle de como arrancar el
  * servidor con ese perfil.</p>
+ *
+ * <p>{@code MensajesFallidos} es la <b>cola de mensajes muertos</b> (DLQ) de
+ * los otros dos destinos: ahi el broker deja lo que no se pudo procesar despues
+ * de todos los reintentos. Que destino usa cada cola como DLQ y cuantas veces se
+ * reintenta no se puede declarar con anotaciones: lo fija
+ * {@code scripts/wildfly/configurar-mensajeria.cli} en el servidor (Artemis
+ * "address-settings").</p>
  */
 @JMSDestinationDefinitions({
         @JMSDestinationDefinition(
@@ -23,7 +30,11 @@ import jakarta.jms.JMSDestinationDefinitions;
         @JMSDestinationDefinition(
                 name = "java:/jms/topic/TopicoRecordatorios",
                 interfaceName = "jakarta.jms.Topic",
-                destinationName = "TopicoRecordatoriosMediConecta")
+                destinationName = "TopicoRecordatoriosMediConecta"),
+        @JMSDestinationDefinition(
+                name = "java:/jms/queue/MensajesFallidos",
+                interfaceName = "jakarta.jms.Queue",
+                destinationName = "MensajesFallidosMediConecta")
 })
 public final class DestinosJms {
 
