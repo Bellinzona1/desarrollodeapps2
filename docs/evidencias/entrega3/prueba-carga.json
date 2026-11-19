@@ -1,0 +1,47 @@
+{
+  "url": "http://127.0.0.1:8080/mediconecta",
+  "usuarios": 20,
+  "segundos": 60.1,
+  "pedidos": 46791,
+  "errores": 0,
+  "porcentaje_errores": 0.0,
+  "pedidos_por_segundo": 778.6,
+  "p50_ms": 9.3,
+  "p95_ms": 110.7,
+  "p99_ms": 165.0,
+  "promedio_ms": 25.6,
+  "umbral_p95_ms": 500.0,
+  "por_operacion": {
+    "GET /api/turnos": {
+      "pedidos": 7949,
+      "p95_ms": 168.7,
+      "errores": 0
+    },
+    "GET /api/turnos/{id}": {
+      "pedidos": 7695,
+      "p95_ms": 22.3,
+      "errores": 0
+    },
+    "GET /api/profesionales": {
+      "pedidos": 7794,
+      "p95_ms": 18.2,
+      "errores": 0
+    },
+    "GET /api/tablero": {
+      "pedidos": 7809,
+      "p95_ms": 26.7,
+      "errores": 0
+    },
+    "GET /api/pacientes?q=": {
+      "pedidos": 7774,
+      "p95_ms": 16.7,
+      "errores": 0
+    },
+    "POST /api/turnos": {
+      "pedidos": 7770,
+      "p95_ms": 37.1,
+      "errores": 0
+    }
+  },
+  "aprobado": true
+}

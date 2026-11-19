@@ -25,7 +25,7 @@ function fila(turno) {
         + '<td data-titulo="Fecha">' + esc(fecha(turno.fechaHora)) + '</td>'
         + '<td data-titulo="Hora">' + esc(hora(turno.fechaHora)) + '</td>'
         + '<td data-titulo="Estado">' + etiquetaEstado(turno.estado) + '</td>'
-        + '<td style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+        + '<td class="u-celda-acciones">'
         + '<a class="boton boton--secundario boton--chico" href="turno.html?id='
         + encodeURIComponent(turno.id) + '">Ver detalle</a>'
         + accionCancelar

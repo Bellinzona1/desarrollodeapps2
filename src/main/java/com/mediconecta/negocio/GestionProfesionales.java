@@ -146,7 +146,7 @@ public class GestionProfesionales {
         }
         String usuario = contexto.getCallerPrincipal().getName();
         if (!usuario.equals(profesional.getUsuario())) {
-            throw new ReglaNegocioException("Solo puede modificar su propia disponibilidad.");
+            throw new AccesoDenegadoException("Solo puede modificar su propia disponibilidad.");
         }
     }
 

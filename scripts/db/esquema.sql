@@ -84,3 +84,28 @@ CREATE TABLE IF NOT EXISTS usuario_roles (
     usuario_id  BIGINT      NOT NULL REFERENCES usuarios (id),
     rol         VARCHAR(20) NOT NULL
 );
+
+-- Idempotency-Key de POST /api/turnos (Entrega 3). Un reintento con la misma
+-- clave devuelve el turno ya creado; la restriccion unica frena dos reintentos
+-- simultaneos. Las filas de mas de 24 h las borra LimpiezaClavesIdempotencia.
+CREATE TABLE IF NOT EXISTS claves_idempotencia (
+    id          BIGSERIAL    PRIMARY KEY,
+    usuario     VARCHAR(100) NOT NULL,
+    clave       VARCHAR(255) NOT NULL,
+    huella      VARCHAR(64)  NOT NULL,
+    turno_id    BIGINT,
+    creada_en   TIMESTAMP    NOT NULL,
+    CONSTRAINT uk_idempotencia_usuario_clave UNIQUE (usuario, clave)
+);
+
+-- Consumidores JMS idempotentes (Entrega 3): cada MDB registra aca la clave de
+-- negocio del mensaje en la misma transaccion en la que lo procesa. Tambien
+-- quedan los mensajes que llegaron a la DLQ (consumidor dlq-confirmaciones).
+CREATE TABLE IF NOT EXISTS mensajes_procesados (
+    id            BIGSERIAL    PRIMARY KEY,
+    consumidor    VARCHAR(60)  NOT NULL,
+    clave         VARCHAR(120) NOT NULL,
+    procesado_en  TIMESTAMP    NOT NULL,
+    detalle       VARCHAR(300),
+    CONSTRAINT uk_mensaje_consumidor_clave UNIQUE (consumidor, clave)
+);

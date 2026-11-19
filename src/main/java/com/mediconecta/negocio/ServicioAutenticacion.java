@@ -3,6 +3,7 @@ package com.mediconecta.negocio;
 import com.mediconecta.datos.RepositorioUsuarios;
 import com.mediconecta.modelo.Usuario;
 import com.mediconecta.seguridad.HashDeClaves;
+import com.mediconecta.seguridad.ProteccionAbuso;
 
 import jakarta.annotation.security.PermitAll;
 import jakarta.ejb.Stateless;
@@ -25,6 +26,9 @@ public class ServicioAutenticacion {
     @Inject
     private RepositorioUsuarios repositorio;
 
+    @Inject
+    private ProteccionAbuso proteccion;
+
     /**
      * @return el usuario autenticado, con sus roles
      * @throws CredencialesInvalidasException si el usuario no existe, esta
@@ -32,6 +36,36 @@ public class ServicioAutenticacion {
      */
     @PermitAll
     public Usuario autenticar(String usuario, String clave) {
+        return autenticar(usuario, clave, null);
+    }
+
+    /**
+     * Igual que {@link #autenticar(String, String)}, con proteccion contra
+     * fuerza bruta: despues de varios fallos seguidos para la misma cuenta o
+     * desde el mismo origen, rechaza los intentos con
+     * {@link DemasiadosIntentosException} (429) <b>sin verificar la
+     * contrasena</b>, asi el atacante no puede seguir probando aunque acierte.
+     *
+     * @param origen direccion IP del cliente, o {@code null} si no se conoce
+     */
+    @PermitAll
+    public Usuario autenticar(String usuario, String clave, String origen) {
+        long espera = proteccion.bloqueoDeLogin(usuario, origen);
+        if (espera > 0) {
+            throw new DemasiadosIntentosException(
+                    "Demasiados intentos fallidos. Espere " + minutos(espera) + " antes de volver a intentar.", espera);
+        }
+        try {
+            Usuario cuenta = verificar(usuario, clave);
+            proteccion.loginCorrecto(usuario);
+            return cuenta;
+        } catch (CredencialesInvalidasException fallo) {
+            proteccion.loginFallido(usuario, origen);
+            throw fallo;
+        }
+    }
+
+    private Usuario verificar(String usuario, String clave) {
         if (usuario == null || usuario.isBlank() || clave == null || clave.isEmpty()) {
             throw new CredencialesInvalidasException();
         }
@@ -47,6 +81,11 @@ public class ServicioAutenticacion {
             throw new CredencialesInvalidasException();
         }
         return cuenta;
+    }
+
+    private static String minutos(long segundos) {
+        long minutos = (segundos + 59) / 60;
+        return minutos == 1 ? "1 minuto" : minutos + " minutos";
     }
 
     private static final String HASH_FICTICIO = HashDeClaves.calcular("clave-ficticia-de-tiempo");

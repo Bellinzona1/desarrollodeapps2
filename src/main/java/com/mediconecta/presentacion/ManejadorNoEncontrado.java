@@ -1,9 +1,9 @@
 package com.mediconecta.presentacion;
 
 import com.mediconecta.negocio.NoEncontradoException;
-
-import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
@@ -11,12 +11,12 @@ import jakarta.ws.rs.ext.Provider;
 @Provider
 public class ManejadorNoEncontrado implements ExceptionMapper<NoEncontradoException> {
 
+    @Context
+    private UriInfo uri;
+
     @Override
     public Response toResponse(NoEncontradoException excepcion) {
-        int codigo = Response.Status.NOT_FOUND.getStatusCode();
-        return Response.status(codigo)
-                .entity(new ErrorRespuesta(excepcion.getMessage(), codigo))
-                .type(MediaType.APPLICATION_JSON)
-                .build();
+        return Problemas.respuesta(Response.Status.NOT_FOUND.getStatusCode(), "no-encontrado",
+                excepcion.getMessage(), uri).build();
     }
 }

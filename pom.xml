@@ -19,6 +19,15 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>17</maven.compiler.release>
+
+        <!-- Umbrales de calidad que verifica "mvn verify" (y el pipeline de CI). -->
+        <cobertura.lineas.minimo>0.80</cobertura.lineas.minimo>
+        <cobertura.ramas.minimo>0.70</cobertura.ramas.minimo>
+        <mutacion.minimo>60</mutacion.minimo>
+
+        <!-- Sonar (opcional): solo se usa si el pipeline tiene SONAR_TOKEN. -->
+        <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.exclusions>**/datos/jpa/**</sonar.coverage.exclusions>
     </properties>
 
     <dependencies>
@@ -49,6 +58,23 @@
             <version>1.1.7</version>
             <scope>test</scope>
         </dependency>
+        <!-- Implementacion de JAX-RS (la misma familia que trae WildFly) solo
+             para los tests: permite probar los recursos REST, los mappers de
+             Problem Details, ETag/304/412 y el cliente HTTP del adapter de IA
+             contra un servidor HTTP local, sin contenedor ni red externa.
+             Scope test: NO entra al WAR. -->
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-client</artifactId>
+            <version>6.2.12.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-json-binding-provider</artifactId>
+            <version>6.2.12.Final</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -67,6 +93,97 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+            </plugin>
+            <plugin>
+                <!-- Cobertura de lineas y ramas (JaCoCo).
+                     - "mvn test"   genera target/site/jacoco/index.html (y jacoco.xml para Sonar).
+                     - "mvn verify" ademas FALLA si la cobertura queda bajo los umbrales.
+                     Se excluyen del calculo los repositorios JPA (datos.jpa): necesitan
+                     un EntityManager real y se prueban de punta a punta contra
+                     PostgreSQL con scripts/smoke-test.ps1. Ver docs/plan-de-pruebas.md. -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <configuration>
+                    <excludes>
+                        <exclude>com/mediconecta/datos/jpa/**</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>preparar-agente</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>reporte</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>verificar-umbrales</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${cobertura.lineas.minimo}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${cobertura.ramas.minimo}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Mutation testing (PIT). No corre en cada build porque tarda:
+                         mvnw test-compile org.pitest:pitest-maven:mutationCoverage
+                     Reporte en target/pit-reports/index.html. Falla si el
+                     mutation score queda bajo ${mutacion.minimo} %. -->
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.17.4</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>1.2.1</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>com.mediconecta.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.mediconecta.*</param>
+                    </targetTests>
+                    <excludedClasses>
+                        <param>com.mediconecta.datos.jpa.*</param>
+                    </excludedClasses>
+                    <mutationThreshold>${mutacion.minimo}</mutationThreshold>
+                    <timestampedReports>false</timestampedReports>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                    <threads>4</threads>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

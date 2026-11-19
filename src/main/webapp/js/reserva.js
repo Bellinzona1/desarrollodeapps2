@@ -130,7 +130,7 @@ async function pasoInicio() {
 
     const pacientes = await api.pacientes();
     contenedor.innerHTML = '<h2>Seleccioná al paciente</h2>'
-        + '<p class="campo__ayuda" style="margin-bottom:16px">Elegí para quién es la reserva.</p>'
+        + '<p class="campo__ayuda u-mb-16">Elegí para quién es la reserva.</p>'
         + '<div class="campo"><label for="doc">Paciente</label>'
         + '<select id="doc"><option value="">Seleccioná un paciente</option>'
         + pacientes.map(p => '<option value="' + esc(p.documento) + '">'
@@ -331,7 +331,7 @@ async function pasoProfesional() {
 
     const profesionales = await api.profesionales(estado.especialidad);
     contenedor.innerHTML = '<h2>Elegí un profesional</h2>'
-        + '<p class="campo__ayuda" style="margin-bottom:16px">Profesionales de '
+        + '<p class="campo__ayuda u-mb-16">Profesionales de '
         + esc(estado.especialidad) + '.</p>'
         + '<div class="opciones">'
         + profesionales.filter(p => p.activo).map(p =>
@@ -381,13 +381,13 @@ async function pasoHorario() {
 
     contenedor.innerHTML = '<h2>Elegí un horario disponible</h2>'
         + (atiende
-            ? '<p class="campo__ayuda" style="margin:6px 0 14px">' + esc(estado.nombreProfesional)
+            ? '<p class="campo__ayuda u-m-6-0-14">' + esc(estado.nombreProfesional)
                 + ' atiende ' + esc(atiende) + '.</p>'
                 + '<div class="campo"><label>Próximos días de atención</label>'
                 + htmlDiasDeAtencion(lugares, fechaElegida) + '</div>'
-            : '<p class="campo__ayuda" style="margin:6px 0 14px">' + esc(estado.nombreProfesional)
+            : '<p class="campo__ayuda u-m-6-0-14">' + esc(estado.nombreProfesional)
                 + ' todavía no tiene días de atención cargados.</p>')
-        + '<div class="campo" style="max-width:240px"><label for="fecha">'
+        + '<div class="campo u-ancho-240"><label for="fecha">'
         + (atiende ? 'Otra fecha' : 'Fecha') + '</label>'
         + '<input type="date" id="fecha" min="' + esc(hoyIso()) + '" value="' + esc(fechaElegida) + '"></div>'
         + '<div id="horarios"></div>';
@@ -418,7 +418,7 @@ async function pasoHorario() {
                     + 'Probá con otro de los días de atención.</p>';
                 return;
             }
-            caja.innerHTML = '<p class="campo__ayuda" style="margin-bottom:10px">'
+            caja.innerHTML = '<p class="campo__ayuda u-mb-10">'
                 + 'Estos son los horarios disponibles para esta fecha.</p>'
                 + '<div class="grilla-horarios">'
                 + horarios.map(h => '<button type="button" class="horario" data-valor="' + esc(h) + '">'
@@ -473,7 +473,7 @@ function pasoConfirmar() {
 }
 
 function pasoFinalizado() {
-    $('paso').innerHTML = '<div class="aviso aviso--exito" style="margin-bottom:20px">'
+    $('paso').innerHTML = '<div class="aviso aviso--exito u-mb-20">'
         + 'Turno #' + esc(estado.turnoId) + ' confirmado para ' + esc(estado.nombrePaciente) + '.</div>'
         + '<h2>Reserva confirmada</h2>'
         + '<p class="campo__ayuda">Guardamos tu turno. Podés verlo en el detalle o empezar una reserva nueva.</p>';

@@ -51,10 +51,23 @@ public class GestionTurnos {
         return repositorio.listarAgenda();
     }
 
+    /**
+     * Un turno por id.
+     *
+     * <p>Control de BOLA/IDOR: un usuario que es <b>solo</b> PACIENTE recibe un
+     * 403 si el turno no es suyo. Sin esta comprobacion bastaba con recorrer los
+     * ids de la URL para leer los turnos (y los datos personales) de otros
+     * pacientes.</p>
+     */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public Turno obtenerTurno(Long id) {
-        return repositorio.buscarPorId(id)
+        Turno turno = repositorio.buscarPorId(id)
                 .orElseThrow(() -> NoEncontradoException.turno(id));
+        if (esSoloPaciente()
+                && !contexto.getCallerPrincipal().getName().equals(turno.getPaciente().getUsuario())) {
+            throw new AccesoDenegadoException("Solo puede consultar sus propios turnos.");
+        }
+        return turno;
     }
 
     /** Turnos de un dia, para el tablero de inicio. */
@@ -152,7 +165,7 @@ public class GestionTurnos {
         if (esSoloMedico()) {
             String usuario = contexto.getCallerPrincipal().getName();
             if (!usuario.equals(turno.getProfesional().getUsuario())) {
-                throw new ReglaNegocioException("Solo puede atender turnos de su propia agenda.");
+                throw new AccesoDenegadoException("Solo puede atender turnos de su propia agenda.");
             }
         }
 
@@ -164,14 +177,14 @@ public class GestionTurnos {
         if (esSoloPaciente()) {
             String usuario = contexto.getCallerPrincipal().getName();
             if (!usuario.equals(turno.getPaciente().getUsuario())) {
-                throw new ReglaNegocioException("Solo puede cancelar sus propios turnos.");
+                throw new AccesoDenegadoException("Solo puede cancelar sus propios turnos.");
             }
             return;
         }
         if (esSoloMedico()) {
             String usuario = contexto.getCallerPrincipal().getName();
             if (!usuario.equals(turno.getProfesional().getUsuario())) {
-                throw new ReglaNegocioException("Solo puede cancelar turnos de su propia agenda.");
+                throw new AccesoDenegadoException("Solo puede cancelar turnos de su propia agenda.");
             }
         }
         // RECEPCION y ADMIN pueden cancelar cualquier turno, sin restriccion adicional.

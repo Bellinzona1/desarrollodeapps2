@@ -15,6 +15,7 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,8 +38,9 @@ import java.util.logging.Logger;
  *
  * <p><b>Secreto.</b> Se toma, en este orden, de la propiedad del sistema
  * {@code mediconecta.jwt.secreto} o de la variable de entorno
- * {@code MEDICONECTA_JWT_SECRETO}. Si no hay ninguna se usa un secreto de
- * desarrollo y se avisa en el log: sirve para la demo, no para produccion.</p>
+ * {@code MEDICONECTA_JWT_SECRETO}. Si no hay ninguna se genera uno aleatorio
+ * al arrancar y se avisa en el log: sirve para la demo (los tokens no
+ * sobreviven un reinicio) y evita tener un secreto fijo en el repositorio.</p>
  *
  * <p><b>Validez.</b> {@code mediconecta.jwt.minutos} (120 por omision).</p>
  */
@@ -52,9 +54,6 @@ public class ServicioJwt {
     private static final String ALGORITMO_JWT = "HS256";
 
     private static final String ALGORITMO_MAC = "HmacSHA256";
-
-    private static final String SECRETO_DESARROLLO =
-            "mediconecta-secreto-de-desarrollo-solo-para-la-demo-2026";
 
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
 
@@ -204,9 +203,14 @@ public class ServicioJwt {
             valor = System.getenv("MEDICONECTA_JWT_SECRETO");
         }
         if (valor == null || valor.isBlank()) {
-            LOG.warning("[JWT] No se configuro mediconecta.jwt.secreto: se usa el secreto de "
-                    + "desarrollo. Configurarlo antes de usar la aplicacion fuera de la demo.");
-            valor = SECRETO_DESARROLLO;
+            // Sin secreto configurado se genera uno al azar en cada arranque: la
+            // demo funciona igual, pero los tokens dejan de valer al reiniciar.
+            // Asi no hay ningun secreto fijo versionado en el repositorio.
+            LOG.warning("[JWT] No se configuro mediconecta.jwt.secreto / MEDICONECTA_JWT_SECRETO: se genero "
+                    + "un secreto aleatorio para esta ejecucion (los tokens no sobreviven un reinicio).");
+            byte[] aleatorio = new byte[48];
+            new SecureRandom().nextBytes(aleatorio);
+            return aleatorio;
         }
         return valor.getBytes(StandardCharsets.UTF_8);
     }

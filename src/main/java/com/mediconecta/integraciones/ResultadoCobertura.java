@@ -12,8 +12,17 @@ public class ResultadoCobertura {
 
     private double copago;
 
-    /** De donde vino el dato: {@code LEGADO}, {@code PARTNER} o {@code NINGUNA}. */
+    /** De donde vino el dato: {@code LEGADO}, {@code PARTNER}, {@code NINGUNA} o {@code SIN_VERIFICAR}. */
     private String origen;
+
+    /**
+     * {@code true} si el sistema externo no respondio y el dato es de
+     * contingencia (la ultima consulta exitosa guardada, o "sin verificar").
+     */
+    private boolean contingencia;
+
+    /** Aclaracion para mostrar cuando el dato es de contingencia. */
+    private String mensaje;
 
     public ResultadoCobertura() {
     }
@@ -47,6 +56,30 @@ public class ResultadoCobertura {
 
     public void setCopago(double copago) {
         this.copago = copago;
+    }
+
+    /** Copia de este resultado marcada como dato de contingencia. */
+    public ResultadoCobertura enContingencia(String aclaracion) {
+        ResultadoCobertura copia = new ResultadoCobertura(vigente, plan, copago, origen);
+        copia.setContingencia(true);
+        copia.setMensaje(aclaracion);
+        return copia;
+    }
+
+    public boolean isContingencia() {
+        return contingencia;
+    }
+
+    public void setContingencia(boolean contingencia) {
+        this.contingencia = contingencia;
+    }
+
+    public String getMensaje() {
+        return mensaje;
+    }
+
+    public void setMensaje(String mensaje) {
+        this.mensaje = mensaje;
     }
 
     public String getOrigen() {

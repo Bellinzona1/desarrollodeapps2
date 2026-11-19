@@ -1,0 +1,59 @@
+
+== JWT ausentes, alterados, vencidos o invalidos
+  [OK]    JWT: sin token -> 401 Problem Details
+  [OK]    JWT: token basura -> 401 Problem Details
+  [OK]    JWT: alg=none -> 401 Problem Details
+  [OK]    JWT: firmado con otro secreto -> 401 Problem Details
+  [OK]    JWT: rol cambiado a ADMIN (firma original) -> 401 Problem Details
+  [OK]    JWT: vencido y bien firmado -> 401 Problem Details
+  [OK]    JWT: emisor ajeno y bien firmado -> 401 Problem Details
+  [OK]    JWT: control: el mismo token con exp futuro es aceptado
+
+== BFLA: funciones fuera del rol -> 403
+  [OK]    BFLA: PACIENTE lista la agenda completa -> 403
+  [OK]    BFLA: PACIENTE lista el padron -> 403
+  [OK]    BFLA: PACIENTE da de alta un profesional -> 403
+  [OK]    BFLA: PACIENTE archiva un turno -> 403
+  [OK]    BFLA: PACIENTE atiende un turno -> 403
+  [OK]    BFLA: PACIENTE ve el tablero -> 403
+  [OK]    BFLA: MEDICO da de alta un paciente -> 403
+  [OK]    BFLA: MEDICO reserva un turno -> 403
+  [OK]    BFLA: RECEPCION da de alta un profesional -> 403
+  [OK]    BFLA: RECEPCION usa el diagnostico de mensajeria -> 403
+  [OK]    BFLA: MEDICO usa la orientacion IA -> 403
+  [OK]    BFLA: control: ADMIN si ve el diagnostico de mensajeria
+
+== BOLA/IDOR: recursos de otros usuarios -> 403
+  [OK]    BOLA: PACIENTE lee un turno ajeno -> 403
+  [OK]    BOLA: PACIENTE cancela un turno ajeno -> 403
+  [OK]    BOLA: PACIENTE lee una ficha ajena -> 403
+  [OK]    BOLA: PACIENTE lee una ficha inexistente (no revela existencia) -> 403
+  [OK]    BOLA: PACIENTE lee el historial ajeno -> 403
+  [OK]    BOLA: PACIENTE consulta la cobertura ajena -> 403
+  [OK]    BOLA: PACIENTE reserva para otro -> 403
+  [OK]    BOLA: PACIENTE inicia el asistente para otro -> 403
+  [OK]    BOLA: MEDICO redefine la agenda de otro profesional -> 403
+  [OK]    BOLA: control: PACIENTE si lee su propio turno
+
+== Inyeccion
+  [OK]    Inyeccion: busqueda q="' OR '1'='1" no devuelve todo el padron ni error 500
+  [OK]    Inyeccion: busqueda q="%' OR 1=1 --" no devuelve todo el padron ni error 500
+  [OK]    Inyeccion: busqueda q="x') UNION SELECT u FROM Usuario u --" no devuelve todo el padron ni error 500
+  [OK]    Inyeccion: busqueda q="\\'; DROP TABLE turnos; --" no devuelve todo el padron ni error 500
+  [OK]    Inyeccion: especialidad="Cardiologia' OR '1'='1" -> lista vacia
+  [OK]    Inyeccion: especialidad="' OR 1=1 --" -> lista vacia
+  [OK]    Inyeccion: documento con comilla en la ruta -> 404
+  [OK]    Inyeccion: id no numerico en la ruta -> 404 sin traza
+  [OK]    Inyeccion: JSON con tipos inesperados -> 400 sin traza
+  [OK]    Inyeccion: XSS almacenado: la API lo devuelve como JSON (nosniff), el front lo escapa con esc()
+  [OK]    Inyeccion: prompt injection con rol system -> 400
+
+== Cabeceras y divulgacion de informacion
+  [OK]    Cabeceras: API: Cache-Control no-store
+  [OK]    Cabeceras: API: Content-Security-Policy
+  [OK]    Cabeceras: API: X-Frame-Options
+  [OK]    Cabeceras: API: X-Content-Type-Options
+  [OK]    Cabeceras: API: Referrer-Policy
+  [OK]    Cabeceras: path traversal a WEB-INF no expone archivos
+
+Resultado: 47 OK, 0 fallidas

@@ -3,6 +3,8 @@ package com.mediconecta.integraciones;
 import com.mediconecta.negocio.IntegracionExternaException;
 
 import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
@@ -41,7 +43,9 @@ import java.util.logging.Logger;
  * <p>La clave solo vive en el servidor: el navegador habla con MediConecta y
  * MediConecta habla con Groq, igual que con los sistemas de obras sociales.</p>
  */
+// NOT_SUPPORTED: la llamada al proveedor no debe retener una transaccion abierta.
 @Stateless
+@TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class AdaptadorIaGroq implements OrientadorEspecialidad {
 
     private static final Logger LOG = Logger.getLogger(AdaptadorIaGroq.class.getName());
@@ -49,6 +53,22 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
     static final String URL_POR_DEFECTO = "https://api.groq.com/openai/v1/chat/completions";
 
     static final String MODELO_POR_DEFECTO = "openai/gpt-oss-120b";
+
+    static final String ORIGEN = "IA";
+
+    /** Timeout de conexion y lectura por omision (el mismo corte que aplica {@link ProteccionIntegracion}). */
+    static final int TIMEOUT_POR_DEFECTO = 5;
+
+    /** {@code mediconecta.ia.timeoutSegundos}, entre 1 y 5; fuera de rango o mal escrito se usa 5. */
+    static int timeoutSegundos() {
+        String valor = configuracion("mediconecta.ia.timeoutSegundos", "MEDICONECTA_IA_TIMEOUT_SEGUNDOS", null);
+        try {
+            int segundos = valor == null ? TIMEOUT_POR_DEFECTO : Integer.parseInt(valor);
+            return segundos >= 1 && segundos <= TIMEOUT_POR_DEFECTO ? segundos : TIMEOUT_POR_DEFECTO;
+        } catch (NumberFormatException e) {
+            return TIMEOUT_POR_DEFECTO;
+        }
+    }
 
     @Override
     public SugerenciaEspecialidad orientar(List<MensajeChat> conversacion, List<String> especialidades) {
@@ -63,9 +83,10 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
         String url = configuracion("mediconecta.ia.url", "MEDICONECTA_IA_URL", URL_POR_DEFECTO);
         String cuerpo = armarPedido(modelo, conversacion, especialidades).toString();
 
+        int segundos = timeoutSegundos();
         Client cliente = ClientBuilder.newBuilder()
-                .connectTimeout(5, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(segundos, TimeUnit.SECONDS)
+                .readTimeout(segundos, TimeUnit.SECONDS)
                 .build();
         try (Response respuesta = cliente.target(url)
                 .request(MediaType.APPLICATION_JSON)
@@ -164,6 +185,7 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
         if (sugerencia.getMensaje().isEmpty()) {
             throw new IntegracionExternaException("El asistente de IA devolvio una respuesta vacia.");
         }
+        sugerencia.setOrigen(ORIGEN);
         return sugerencia;
     }
 
@@ -175,7 +197,7 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
         return texto.isEmpty() || texto.equalsIgnoreCase("null") ? null : texto;
     }
 
-    private static String configuracion(String propiedad, String variableDeEntorno, String porDefecto) {
+    static String configuracion(String propiedad, String variableDeEntorno, String porDefecto) {
         String valor = System.getProperty(propiedad);
         if (valor == null || valor.isBlank()) {
             valor = System.getenv(variableDeEntorno);

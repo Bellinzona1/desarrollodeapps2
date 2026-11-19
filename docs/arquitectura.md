@@ -685,3 +685,27 @@ el despliegue fallaría. El WAR pesa unos 120 kB, casi todo frontend.
 | Interfaz acorde al prototipo | ✔ ocho pantallas, responsive |
 | WAR desplegable | ✔ `target/mediconecta.war` |
 | Documentación actualizada | ✔ este documento, README y los tres documentos de defensa |
+
+---
+
+## 9. Checkpoint 3: resiliencia, mensajería confiable y contrato REST
+
+Agregados de la tercera entrega. El detalle de las pruebas está en
+[`plan-de-pruebas.md`](plan-de-pruebas.md) y la relación requisito → código → prueba en
+[`matriz-trazabilidad.md`](matriz-trazabilidad.md).
+
+| Tema | Decisión | Dónde |
+|---|---|---|
+| Timeout | 5 s duros por llamada externa, con el `ManagedExecutorService` del contenedor; además 5 s en cada cliente (JAX-RS, JAX-WS) para liberar el hilo | `integraciones.ProteccionIntegracion`, adapters |
+| Circuit breaker | 3 fallas seguidas abren el circuito 30 s; luego una llamada de prueba (semiabierto) | `ProteccionIntegracion` |
+| Fallback | Cobertura: último dato bueno (≤ 24 h) o "sin verificar", nunca un 502. IA: orientador por palabras clave (segundo Adapter de `OrientadorEspecialidad`) | `GestorCobertura`, `MemoriaCobertura`, `OrientadorPorPalabrasClave` |
+| Transacciones y llamadas remotas | Adapters `NOT_SUPPORTED`: no se retiene una transacción de base durante una llamada externa y su falla no marca para rollback la del llamador | adapters |
+| Idempotency-Key | Registro por usuario + clave en la **misma transacción JTA** que la reserva; restricción única para reintentos simultáneos (409); otra huella → 422 | `FachadaReservas#reservarIdempotente`, `RegistroIdempotencia` |
+| ETag | Hash de los campos visibles, calculado en presentación (no hizo falta columna `@Version`); `If-Match` opcional para no romper clientes | `presentacion.Etiquetas` |
+| Errores | Problem Details (RFC 9457) con extensiones `error`/`codigo` por compatibilidad | `presentacion.Problemas`, `Manejador*` |
+| Mensajería | Mensajes `PERSISTENT` con clave de negocio, consumidores idempotentes, DLQ propia con 3 reintentos, suscripciones durables al tópico | `mensajeria.*`, `configurar-mensajeria.cli` |
+| Seguridad | BOLA cerrado en `obtenerTurno` y `buscarPorDocumento` (403 con `AccesoDenegadoException`); fuerza bruta → 429; cabeceras CSP; sin secreto JWT fijo | `negocio`, `seguridad.ProteccionAbuso`, `FiltroCabecerasSeguridad` |
+| Calidad | Maven Wrapper, JaCoCo (80/70), PIT (60), CI con gitleaks y Sonar opcional | `pom.xml`, `.github/workflows/ci.yml` |
+
+Patrones nuevos o reforzados: **Adapter** (ahora con dos implementaciones de
+`OrientadorEspecialidad`), **Circuit Breaker** e **Idempotent Receiver** (mensajería).

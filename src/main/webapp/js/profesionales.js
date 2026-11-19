@@ -193,14 +193,13 @@ function filaFranja(franja) {
         '<option value="' + dia.valor + '"' + (franja && franja.diaSemana === dia.valor ? ' selected' : '')
         + '>' + dia.texto + '</option>').join('');
 
-    return '<div class="franja" style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr auto;'
-        + 'gap:10px;align-items:end;margin-bottom:12px">'
-        + '<div class="campo" style="margin:0"><label>Día</label><select class="f-dia">' + opciones + '</select></div>'
-        + '<div class="campo" style="margin:0"><label>Desde</label>'
+    return '<div class="franja franja--grilla">'
+        + '<div class="campo u-m-0"><label>Día</label><select class="f-dia">' + opciones + '</select></div>'
+        + '<div class="campo u-m-0"><label>Desde</label>'
         + '<input type="time" class="f-desde" value="' + esc(franja ? franja.horaDesde.substring(0, 5) : '09:00') + '"></div>'
-        + '<div class="campo" style="margin:0"><label>Hasta</label>'
+        + '<div class="campo u-m-0"><label>Hasta</label>'
         + '<input type="time" class="f-hasta" value="' + esc(franja ? franja.horaHasta.substring(0, 5) : '13:00') + '"></div>'
-        + '<div class="campo" style="margin:0"><label>Minutos</label>'
+        + '<div class="campo u-m-0"><label>Minutos</label>'
         + '<input type="number" class="f-duracion" min="5" max="120" step="5" value="'
         + esc(franja ? franja.duracionMinutos : 30) + '"></div>'
         + '<button type="button" class="boton boton--peligro boton--chico f-quitar">Quitar</button>'

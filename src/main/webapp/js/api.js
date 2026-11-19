@@ -40,7 +40,7 @@ export class ErrorApi extends Error {
     }
 }
 
-async function pedir(metodo, ruta, cuerpo) {
+async function pedir(metodo, ruta, cuerpo, cabecerasExtra) {
     const opciones = {
         method: metodo,
         headers: {
@@ -51,6 +51,10 @@ async function pedir(metodo, ruta, cuerpo) {
         // asistente @Stateful. La identidad, en cambio, va en el token.
         credentials: 'same-origin'
     };
+
+    if (cabecerasExtra) {
+        Object.assign(opciones.headers, cabecerasExtra);
+    }
 
     const token = leerToken();
     if (token) {
@@ -95,13 +99,44 @@ async function pedir(metodo, ruta, cuerpo) {
     }
 
     if (!respuesta.ok) {
-        const mensaje = (datos && datos.error)
-            ? datos.error
+        // Errores en formato Problem Details (RFC 9457): el texto esta en "detail"
+        // ("error" se mantiene por compatibilidad con la Entrega 2).
+        const mensaje = (datos && (datos.detail || datos.error))
+            ? (datos.detail || datos.error)
             : 'El servidor respondio con un error (' + respuesta.status + ').';
         throw new ErrorApi(mensaje, respuesta.status);
     }
 
     return datos;
+}
+
+/**
+ * Idempotency-Key para el alta de turnos: el mismo pedido (mismos datos) reusa
+ * la misma clave mientras la pagina este abierta. Asi un doble clic o un
+ * reintento despues de un corte de red no crea dos turnos: el servidor devuelve
+ * el que ya habia creado.
+ */
+const clavesDeAlta = new Map();
+
+function claveIdempotencia(pedido) {
+    const huella = JSON.stringify(pedido);
+    if (!clavesDeAlta.has(huella)) {
+        clavesDeAlta.set(huella, nuevoUuid());
+    }
+    return clavesDeAlta.get(huella);
+}
+
+function nuevoUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    // randomUUID solo existe en contextos seguros (https o localhost).
+    const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-'
+        + hex.slice(16, 20) + '-' + hex.slice(20);
 }
 
 /** Manda al usuario a la pantalla de login (sin token o con el token vencido). */
@@ -124,7 +159,7 @@ export const api = {
     // Turnos
     turnos: () => pedir('GET', '/turnos'),
     turno: (id) => pedir('GET', '/turnos/' + encodeURIComponent(id)),
-    crearTurno: (pedido) => pedir('POST', '/turnos', pedido),
+    crearTurno: (pedido) => pedir('POST', '/turnos', pedido, { 'Idempotency-Key': claveIdempotencia(pedido) }),
     cancelarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/cancelar'),
     atenderTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/atender'),
     archivarTurno: (id) => pedir('PUT', '/turnos/' + encodeURIComponent(id) + '/archivar'),

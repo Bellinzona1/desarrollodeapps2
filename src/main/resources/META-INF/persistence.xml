@@ -27,6 +27,8 @@
         <class>com.mediconecta.modelo.Disponibilidad</class>
         <class>com.mediconecta.modelo.Turno</class>
         <class>com.mediconecta.modelo.Usuario</class>
+        <class>com.mediconecta.modelo.RegistroIdempotencia</class>
+        <class>com.mediconecta.modelo.MensajeProcesado</class>
 
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
 

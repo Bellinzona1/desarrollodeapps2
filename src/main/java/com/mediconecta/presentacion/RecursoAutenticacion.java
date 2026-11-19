@@ -5,10 +5,12 @@ import com.mediconecta.negocio.ServicioAutenticacion;
 import com.mediconecta.seguridad.ServicioJwt;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 
 import java.util.ArrayList;
@@ -26,7 +28,8 @@ import java.util.List;
  * POST /api/auth/login  {"usuario":"recepcion","clave":"Demo.2026"}
  * 200 {"token":"eyJ...","tipo":"Bearer","expiraEnSegundos":7200,
  *      "usuario":"recepcion","roles":["RECEPCION"]}
- * 401 {"error":"Usuario o contrasena incorrectos.","codigo":401}
+ * 401 application/problem+json {"title":"Unauthorized","status":401,"detail":"Usuario o contrasena incorrectos.",...}
+ * 429 application/problem+json + Retry-After (demasiados intentos fallidos)
  * </pre>
  */
 @Path("/auth")
@@ -40,12 +43,21 @@ public class RecursoAutenticacion {
     @Inject
     private ServicioJwt servicioJwt;
 
+    @Context
+    private HttpServletRequest peticion;
+
+    /**
+     * Varios intentos fallidos seguidos devuelven {@code 429 Too Many Requests}
+     * con {@code Retry-After}: la proteccion contra fuerza bruta vive en el
+     * negocio ({@link ServicioAutenticacion}); aca solo se le pasa la IP.
+     */
     @POST
     @Path("/login")
     public RespuestaLogin login(PedidoLogin pedido) {
         Usuario usuario = servicioAutenticacion.autenticar(
                 pedido == null ? null : pedido.getUsuario(),
-                pedido == null ? null : pedido.getClave());
+                pedido == null ? null : pedido.getClave(),
+                peticion == null ? null : peticion.getRemoteAddr());
 
         List<String> roles = new ArrayList<>(usuario.getRoles());
 

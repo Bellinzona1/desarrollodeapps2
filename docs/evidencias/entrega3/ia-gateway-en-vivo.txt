@@ -1,0 +1,8 @@
+modo=ok segundos=0.09 respuesta={"especialidad":"Traumatologia","mensaje":"Por lo que contas, te conviene Traumatologia.","origen":"IA","urgente":false}
+[proveedor simulado] modo=ok auth=si modelo=openai/gpt-oss-120b ultimo mensaje='Me torci el tobillo jugando al futbol'
+modo=lento segundos=5.07 respuesta={"especialidad":"Traumatologia","mensaje":"El asistente inteligente no esta disponible en este momento. Por lo que contaste, te sugerimos Traumatologia. Podes confirmarla o elegir otra de la lista.","origen":"REGLAS","urgente":false}
+[proveedor simulado] modo=lento auth=si modelo=openai/gpt-oss-120b ultimo mensaje='Me torci el tobillo jugando al futbol'
+modo=error segundos=0.08 respuesta={"especialidad":"Traumatologia","mensaje":"El asistente inteligente no esta disponible en este momento. Por lo que contaste, te sugerimos Traumatologia. Podes confirmarla o elegir otra de la lista.","origen":"REGLAS","urgente":false}
+[proveedor simulado] modo=error auth=si modelo=openai/gpt-oss-120b ultimo mensaje='Me torci el tobillo jugando al futbol'
+modo=ok segundos=0.08 respuesta={"especialidad":"Traumatologia","mensaje":"Por lo que contas, te conviene Traumatologia.","origen":"IA","urgente":false}
+[proveedor simulado] modo=ok auth=si modelo=openai/gpt-oss-120b ultimo mensaje='Me torci el tobillo jugando al futbol'

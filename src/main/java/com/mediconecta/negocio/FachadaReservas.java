@@ -1,21 +1,32 @@
 package com.mediconecta.negocio;
 
+import com.mediconecta.datos.RepositorioIdempotencia;
 import com.mediconecta.mensajeria.NotificadorTurnos;
 import com.mediconecta.modelo.EstadoTurno;
 import com.mediconecta.modelo.Paciente;
 import com.mediconecta.modelo.Profesional;
+import com.mediconecta.modelo.RegistroIdempotencia;
 import com.mediconecta.modelo.Turno;
 
+import jakarta.annotation.Resource;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.ejb.SessionContext;
 import jakarta.ejb.Stateless;
 import jakarta.ejb.TransactionAttribute;
 import jakarta.ejb.TransactionAttributeType;
 import jakarta.inject.Inject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * Patron Facade: unica puerta de entrada al caso de uso "reservar un turno".
@@ -51,6 +62,18 @@ public class FachadaReservas {
 
     @Inject
     private NotificadorTurnos notificadorTurnos;
+
+    @Inject
+    private RepositorioIdempotencia repositorioIdempotencia;
+
+    @Resource
+    private SessionContext contexto;
+
+    /** Cuanto tiempo se recuerda una {@code Idempotency-Key} ya usada. */
+    static final Duration VIGENCIA_CLAVE = Duration.ofHours(24);
+
+    /** Claves aceptadas: lo que generan los clientes (UUID, ULID, etc.), hasta 255 caracteres. */
+    private static final Pattern FORMATO_CLAVE = Pattern.compile("[A-Za-z0-9._:-]{1,255}");
 
     // ---------- Consultas que alimentan la pantalla de reserva ----------
 
@@ -149,6 +172,103 @@ public class FachadaReservas {
         notificadorTurnos.turnoConfirmado(turno);
 
         return turno;
+    }
+
+    /**
+     * Reserva con {@code Idempotency-Key}: si el cliente reintenta el mismo
+     * pedido (por un timeout, un doble clic o una red inestable) recibe el
+     * turno que ya se habia creado, en lugar de un segundo turno.
+     *
+     * <p>Todo ocurre en la misma transaccion JTA que {@link #reservar}: el
+     * registro de la clave y el turno se confirman o se deshacen juntos.
+     * Reglas (draft IETF "The Idempotency-Key HTTP Header Field"):</p>
+     * <ul>
+     *   <li>sin clave, se comporta igual que {@link #reservar};</li>
+     *   <li>misma clave y mismo pedido: se devuelve el turno original
+     *       ({@code repetida = true}) y no se envia otro mensaje JMS;</li>
+     *   <li>misma clave y otro pedido: {@link IdempotenciaException} REUTILIZADA;</li>
+     *   <li>misma clave mientras el primer pedido sigue en curso:
+     *       {@link IdempotenciaException} EN_CURSO.</li>
+     * </ul>
+     * <p>La clave es por usuario: dos usuarios pueden usar el mismo valor.</p>
+     */
+    @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.ADMIN})
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public ResultadoReserva reservarIdempotente(SolicitudTurno solicitud, String claveIdempotencia) {
+        if (claveIdempotencia == null) {
+            return new ResultadoReserva(reservar(solicitud), false);
+        }
+        if (solicitud == null) {
+            throw new ReglaNegocioException("Debe enviar los datos del turno.");
+        }
+        String clave = normalizarClave(claveIdempotencia);
+        String usuario = contexto.getCallerPrincipal().getName();
+        String huella = huella(solicitud);
+        LocalDateTime ahora = LocalDateTime.now();
+
+        Optional<RegistroIdempotencia> previo = repositorioIdempotencia.buscar(usuario, clave);
+        RegistroIdempotencia registro;
+        if (previo.isEmpty()) {
+            registro = new RegistroIdempotencia(usuario, clave, huella, ahora);
+            if (!repositorioIdempotencia.registrar(registro)) {
+                throw new IdempotenciaException(IdempotenciaException.Motivo.EN_CURSO,
+                        "Ya hay un pedido en curso con la misma Idempotency-Key. Reintente en unos segundos.");
+            }
+        } else if (previo.get().getCreadaEn().isBefore(ahora.minus(VIGENCIA_CLAVE))) {
+            // Clave vencida: se trata como nueva.
+            registro = previo.get();
+            registro.setHuella(huella);
+            registro.setCreadaEn(ahora);
+            registro.setTurnoId(null);
+        } else {
+            registro = previo.get();
+            if (!registro.getHuella().equals(huella)) {
+                throw new IdempotenciaException(IdempotenciaException.Motivo.REUTILIZADA,
+                        "La Idempotency-Key ya se uso con otros datos. Genere una clave nueva para este pedido.");
+            }
+            if (registro.getTurnoId() != null) {
+                return new ResultadoReserva(gestionTurnos.obtenerTurno(registro.getTurnoId()), true);
+            }
+            // El intento anterior con esta clave no llego a crear el turno
+            // (fallo una regla de negocio): se vuelve a intentar.
+        }
+
+        Turno turno = reservar(solicitud);
+        registro.setTurnoId(turno.getId());
+        repositorioIdempotencia.actualizar(registro);
+        return new ResultadoReserva(turno, false);
+    }
+
+    /** Acepta la clave tal cual o como cadena de Structured Fields ({@code "..."}). */
+    static String normalizarClave(String clave) {
+        String texto = clave.trim();
+        if (texto.length() >= 2 && texto.startsWith("\"") && texto.endsWith("\"")) {
+            texto = texto.substring(1, texto.length() - 1);
+        }
+        if (!FORMATO_CLAVE.matcher(texto).matches()) {
+            throw new ReglaNegocioException("La cabecera Idempotency-Key debe tener entre 1 y 255 caracteres"
+                    + " (letras, numeros, punto, guion, guion bajo o dos puntos).");
+        }
+        return texto;
+    }
+
+    /** SHA-256 de los datos del pedido: identifica "el mismo pedido" aunque cambie el orden del JSON. */
+    static String huella(SolicitudTurno s) {
+        String texto = String.join("\n",
+                valor(s.getDocumentoPaciente()), valor(s.getNombrePaciente()),
+                s.getProfesionalId() == null ? "" : s.getProfesionalId().toString(),
+                valor(s.getNombreProfesional()), valor(s.getEspecialidad()),
+                valor(s.getFechaHora()), valor(s.getMotivo()));
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(texto.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("La JVM no soporta SHA-256", e);
+        }
+    }
+
+    private static String valor(String texto) {
+        return texto == null ? "" : texto.trim();
     }
 
     private Paciente resolverPaciente(SolicitudTurno solicitud) {

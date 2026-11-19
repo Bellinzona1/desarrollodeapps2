@@ -84,9 +84,20 @@
         <session-timeout>30</session-timeout>
         <cookie-config>
             <http-only>true</http-only>
+            <!-- SameSite=Strict se agrega en WEB-INF/undertow-handlers.conf
+                 (el esquema web-app 6.0 no tiene un elemento para eso). -->
         </cookie-config>
         <tracking-mode>COOKIE</tracking-mode>
     </session-config>
+
+    <!-- 401 de MecanismoAutenticacionJwt: el cuerpo Problem Details lo escribe
+         seguridad.RespuestaNoAutenticado. El mecanismo no escribe la respuesta
+         por su cuenta para no chocar con el sendError de Undertow (que dejaba un
+         stack trace en el log por cada pedido sin token). -->
+    <error-page>
+        <error-code>401</error-code>
+        <location>/errores/no-autenticado</location>
+    </error-page>
 
     <welcome-file-list>
         <welcome-file>index.html</welcome-file>

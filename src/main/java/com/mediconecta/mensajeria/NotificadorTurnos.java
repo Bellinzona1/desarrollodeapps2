@@ -5,6 +5,7 @@ import com.mediconecta.modelo.Turno;
 import jakarta.annotation.Resource;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
+import jakarta.jms.DeliveryMode;
 import jakarta.jms.JMSConnectionFactory;
 import jakarta.jms.JMSContext;
 import jakarta.jms.Queue;
@@ -30,22 +31,30 @@ import java.time.format.DateTimeFormatter;
  * dentro de la misma transaccion JTA que crea el turno. El {@link JMSContext}
  * se obtiene de la connection factory XA ({@code java:/JmsXA}), asi que queda
  * enlistado en esa transaccion: si el commit de la base de datos no llega a
- * ocurrir, ningun mensaje se entrega. Es la demostracion concreta de la
- * transaccion declarativa sobre un flujo critico de varios pasos.</p>
+ * ocurrir, ningun mensaje se entrega.</p>
+ *
+ * <p><b>Entrega 3 - confiabilidad.</b> Los mensajes son {@code PERSISTENT}
+ * (se escriben en el journal del broker y sobreviven un reinicio) y llevan la
+ * propiedad {@code claveIdempotencia} ({@code turno-15-confirmado}) que usan
+ * los consumidores para no procesar dos veces el mismo aviso.</p>
  */
 @Stateless
 public class NotificadorTurnos {
 
     private static final DateTimeFormatter FORMATO = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
+    static final String TIPO_CONFIRMACION = "CONFIRMACION";
+
+    static final String TIPO_RECORDATORIO = "RECORDATORIO";
+
     @Inject
     @JMSConnectionFactory("java:/JmsXA")
     private JMSContext contexto;
 
-    @Resource(lookup = "java:/jms/queue/ColaConfirmaciones")
+    @Resource(lookup = DestinosJms.COLA_CONFIRMACIONES)
     private Queue colaConfirmaciones;
 
-    @Resource(lookup = "java:/jms/topic/TopicoRecordatorios")
+    @Resource(lookup = DestinosJms.TOPICO_RECORDATORIOS)
     private Topic topicoRecordatorios;
 
     public void turnoConfirmado(Turno turno) {
@@ -56,13 +65,23 @@ public class NotificadorTurnos {
                 turno.getProfesional().getNombre(),
                 turno.getEspecialidad(),
                 turno.getFechaHora().format(FORMATO));
+        String clave = claveDe(turno);
 
         contexto.createProducer()
+                .setDeliveryMode(DeliveryMode.PERSISTENT)
                 .setProperty("turnoId", turno.getId())
-                .send(colaConfirmaciones, "CONFIRMACION|" + resumen);
+                .setProperty(MensajeTurno.PROPIEDAD_CLAVE, clave)
+                .send(colaConfirmaciones, TIPO_CONFIRMACION + "|" + resumen);
 
         contexto.createProducer()
+                .setDeliveryMode(DeliveryMode.PERSISTENT)
                 .setProperty("turnoId", turno.getId())
-                .send(topicoRecordatorios, "RECORDATORIO|" + resumen);
+                .setProperty(MensajeTurno.PROPIEDAD_CLAVE, clave)
+                .send(topicoRecordatorios, TIPO_RECORDATORIO + "|" + resumen);
+    }
+
+    /** Clave de negocio del aviso: la misma para la cola y el topico (cada consumidor lleva su registro). */
+    static String claveDe(Turno turno) {
+        return "turno-" + turno.getId() + "-confirmado";
     }
 }

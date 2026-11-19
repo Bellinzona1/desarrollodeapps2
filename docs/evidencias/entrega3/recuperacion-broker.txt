@@ -1,0 +1,23 @@
+﻿1) Se detiene la entrega al consumidor de la cola
+
+{"outcome" => "success"}
+2) Se reserva un turno: el mensaje queda pendiente en la cola
+   turno creado: 22
+JAVA_HOME is not set. Unexpected results may occur.
+    "result" => 1L
+3) Se reinicia el servidor completo (broker incluido)
+    "outcome" => "success",
+TURNO=22
+
+
+1) Se detiene la entrega al consumidor de la cola
+
+{"outcome" => "success"}
+2) Se reserva un turno: el mensaje queda pendiente en la cola
+   turno creado: 4
+   (topico: la copia queda en la suscripcion durable AvisoPaciente)
+3) Se reinicia el servidor completo (broker incluido)
+    "outcome" => "success",
+TURNO=4
+
+

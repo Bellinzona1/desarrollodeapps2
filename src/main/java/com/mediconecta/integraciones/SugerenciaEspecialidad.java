@@ -16,6 +16,12 @@ public class SugerenciaEspecialidad {
 
     private boolean urgente;
 
+    /**
+     * Quien hizo la sugerencia: {@code IA} (el modelo de lenguaje) o
+     * {@code REGLAS} (el fallback por palabras clave, cuando la IA no responde).
+     */
+    private String origen;
+
     public SugerenciaEspecialidad() {
     }
 
@@ -39,6 +45,14 @@ public class SugerenciaEspecialidad {
 
     public void setEspecialidad(String especialidad) {
         this.especialidad = especialidad;
+    }
+
+    public String getOrigen() {
+        return origen;
+    }
+
+    public void setOrigen(String origen) {
+        this.origen = origen;
     }
 
     public boolean isUrgente() {

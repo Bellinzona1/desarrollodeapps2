@@ -106,5 +106,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "No se pudo configurar la seguridad. Verifica que WildFly este levantado."
 }
 
+# ------------------------------------------------------------------- 5 ------
+Paso "Configurando la mensajeria (journal persistente, reintentos y DLQ)"
+
+& $cli --connect "--file=$(Join-Path $PSScriptRoot 'configurar-mensajeria.cli')"
+if ($LASTEXITCODE -ne 0) {
+    throw "No se pudo configurar la mensajeria. El servidor tiene que estar levantado con -c standalone-full.xml."
+}
+
 Write-Host ""
 Write-Host "WildFly configurado. Ya se puede copiar target\mediconecta.war a standalone\deployments\." -ForegroundColor Green

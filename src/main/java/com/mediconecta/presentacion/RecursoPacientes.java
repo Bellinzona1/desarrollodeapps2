@@ -14,7 +14,10 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.EntityTag;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Request;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
@@ -33,6 +36,12 @@ public class RecursoPacientes {
     @Context
     private UriInfo uriInfo;
 
+    @Context
+    private Request pedidoHttp;
+
+    @Context
+    private HttpHeaders cabeceras;
+
     @GET
     public List<Paciente> listar(@QueryParam("q") String texto) {
         return gestionPacientes.buscar(texto);
@@ -45,27 +54,45 @@ public class RecursoPacientes {
         return gestionPacientes.miFicha();
     }
 
+    /** Ficha con {@code ETag}; {@code 304} si el cliente ya tiene la version vigente. */
     @GET
     @Path("/{documento}")
-    public Paciente obtener(@PathParam("documento") String documento) {
-        return gestionPacientes.buscarPorDocumento(documento);
+    public Response obtener(@PathParam("documento") String documento) {
+        Paciente paciente = gestionPacientes.buscarPorDocumento(documento);
+        EntityTag etiqueta = Etiquetas.de(paciente);
+        Response corte = Etiquetas.precondicionFallida(pedidoHttp, etiqueta, uriInfo);
+        return corte != null ? corte : Etiquetas.ok(paciente, etiqueta);
     }
 
     @POST
     public Response registrar(Paciente paciente) {
         Paciente creado = gestionPacientes.registrarPaciente(paciente);
 
+        // Plantilla + build(valor): UriBuilder codifica el documento en lugar de
+        // interpretarlo como parte de la ruta (con path(texto) un "{" rompia el URI).
         URI ubicacion = uriInfo.getAbsolutePathBuilder()
-                .path(creado.getDocumento())
-                .build();
+                .path("{documento}")
+                .build(creado.getDocumento());
 
         return Response.created(ubicacion).entity(creado).build();
     }
 
+    /**
+     * Actualiza los datos de contacto. Con {@code If-Match} evita pisar los
+     * cambios que otro usuario hizo despues de que este leyo la ficha (412).
+     */
     @PUT
     @Path("/{documento}")
-    public Paciente actualizar(@PathParam("documento") String documento, Paciente datos) {
-        return gestionPacientes.actualizarDatos(documento, datos);
+    public Response actualizar(@PathParam("documento") String documento, Paciente datos) {
+        if (Etiquetas.tieneCondicion(cabeceras)) {
+            Response corte = Etiquetas.precondicionFallida(pedidoHttp,
+                    Etiquetas.de(gestionPacientes.buscarPorDocumento(documento)), uriInfo);
+            if (corte != null) {
+                return corte;
+            }
+        }
+        Paciente actualizado = gestionPacientes.actualizarDatos(documento, datos);
+        return Etiquetas.ok(actualizado, Etiquetas.de(actualizado));
     }
 
     @GET

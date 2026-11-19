@@ -131,7 +131,7 @@ async function mostrarDiasDeAtencion() {
     }
 
     const primero = lugares.find(l => l.libres > 0);
-    caja.innerHTML = '<p class="campo__ayuda" style="margin-bottom:8px">' + esc(elegido.profesional)
+    caja.innerHTML = '<p class="campo__ayuda u-mb-8">' + esc(elegido.profesional)
         + ' atiende ' + esc(textoDisponibilidad(disponibilidad)) + '.</p>'
         + htmlDiasDeAtencion(lugares, primero ? primero.dia : null);
 

@@ -1,10 +1,14 @@
 package com.mediconecta.integraciones;
 
+import com.mediconecta.negocio.DemasiadosIntentosException;
 import com.mediconecta.negocio.GestionProfesionales;
 import com.mediconecta.negocio.ReglaNegocioException;
 import com.mediconecta.negocio.Roles;
+import com.mediconecta.seguridad.ProteccionAbuso;
 
+import jakarta.annotation.Resource;
 import jakarta.annotation.security.RolesAllowed;
+import jakarta.ejb.SessionContext;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
 
@@ -37,16 +41,49 @@ public class GestorOrientacion {
     @Inject
     private OrientadorEspecialidad orientador;
 
+    @Inject
+    private ProteccionIntegracion proteccion;
+
+    @Inject
+    private ProteccionAbuso proteccionAbuso;
+
+    @Resource
+    private SessionContext contexto;
+
+    static final String SISTEMA_IA = "asistente-ia";
+
+    /** Fallback sin red: se usa si la IA falla, tarda mas de 5 s o tiene el circuito abierto. */
+    private static final OrientadorEspecialidad RESPALDO = new OrientadorPorPalabrasClave();
+
+    /**
+     * Sugiere la especialidad.
+     *
+     * <p>Resiliencia: la llamada al proveedor pasa por {@link ProteccionIntegracion}
+     * (timeout de 5 s y circuit breaker). Si falla, responde
+     * {@link OrientadorPorPalabrasClave}: la persona siempre recibe una
+     * respuesta util y nunca un error 502 en el chat.</p>
+     *
+     * <p>Abuso: cada usuario puede hacer hasta 10 consultas por minuto (cada una
+     * consume cuota paga del proveedor); despues recibe un 429.</p>
+     */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.ADMIN})
     public SugerenciaEspecialidad sugerirEspecialidad(List<MensajeChat> conversacion) {
         validar(conversacion);
+
+        long espera = proteccionAbuso.consumirOrientacion(contexto.getCallerPrincipal().getName());
+        if (espera > 0) {
+            throw new DemasiadosIntentosException("Hiciste muchas consultas seguidas al asistente. Espera "
+                    + espera + " segundos o elegi la especialidad de la lista.", espera);
+        }
 
         List<String> especialidades = gestionProfesionales.listarEspecialidades();
         if (especialidades.isEmpty()) {
             throw new ReglaNegocioException("No hay especialidades con profesionales activos.");
         }
 
-        SugerenciaEspecialidad sugerencia = orientador.orientar(conversacion, especialidades);
+        SugerenciaEspecialidad sugerencia = proteccion.ejecutar(SISTEMA_IA,
+                () -> orientador.orientar(conversacion, especialidades),
+                falla -> RESPALDO.orientar(conversacion, especialidades));
         sugerencia.setEspecialidad(especialidadDeLaLista(sugerencia.getEspecialidad(), especialidades));
         return sugerencia;
     }
@@ -92,7 +129,7 @@ public class GestorOrientacion {
                 .orElse(null);
     }
 
-    private static String normalizar(String texto) {
+    static String normalizar(String texto) {
         return Normalizer.normalize(texto.trim(), Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT);

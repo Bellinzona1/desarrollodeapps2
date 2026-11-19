@@ -21,6 +21,12 @@ import java.util.Set;
  * el partner moderno por REST ({@link AdaptadorObraSocialPartner}). Quien
  * llama a {@link #validarCobertura(String)} no sabe cual de los dos se uso:
  * esa es la idea del patron.</p>
+ *
+ * <p><b>Resiliencia (Entrega 3).</b> La llamada al adapter pasa por
+ * {@link ProteccionIntegracion} (timeout de 5 s y circuit breaker). Si el
+ * sistema externo falla, se responde con el ultimo dato bueno guardado en
+ * {@link MemoriaCobertura} o, si no hay, con un resultado "sin verificar":
+ * nunca un 502 que deje la pantalla en blanco.</p>
  */
 @Stateless
 public class GestorCobertura {
@@ -44,6 +50,16 @@ public class GestorCobertura {
     @Inject
     private AdaptadorObraSocialPartner adaptadorPartner;
 
+    @Inject
+    private ProteccionIntegracion proteccion;
+
+    @Inject
+    private MemoriaCobertura memoria;
+
+    static final String SISTEMA_LEGADO = "obra-social-legado";
+
+    static final String SISTEMA_PARTNER = "obra-social-partner";
+
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public ResultadoCobertura validarCobertura(String documento) {
         Paciente paciente = gestionPacientes.buscarPorDocumento(documento);
@@ -55,8 +71,31 @@ public class GestorCobertura {
         }
 
         String nombre = obraSocialDe(obraSocial);
-        ValidadorCobertura adaptador = esLegada(nombre) ? adaptadorLegado : adaptadorPartner;
-        return adaptador.validar(nombre, paciente.getDocumento());
+        boolean legada = esLegada(nombre);
+        ValidadorCobertura adaptador = legada ? adaptadorLegado : adaptadorPartner;
+        String afiliado = paciente.getDocumento();
+        String clave = nombre + "|" + afiliado;
+
+        return proteccion.ejecutar(legada ? SISTEMA_LEGADO : SISTEMA_PARTNER,
+                () -> {
+                    ResultadoCobertura resultado = adaptador.validar(nombre, afiliado);
+                    memoria.recordar(clave, resultado);
+                    return resultado;
+                },
+                falla -> memoria.ultimo(clave).orElseGet(() -> sinVerificar(nombre, legada)));
+    }
+
+    /**
+     * Fallback sin dato previo: no se inventa la cobertura. Se informa que no
+     * se pudo verificar para que recepcion la controle a mano; el turno se
+     * puede seguir gestionando igual (la cobertura no bloquea la reserva).
+     */
+    static ResultadoCobertura sinVerificar(String obraSocial, boolean legada) {
+        ResultadoCobertura resultado = new ResultadoCobertura(false, null, 0, "SIN_VERIFICAR");
+        resultado.setContingencia(true);
+        resultado.setMensaje("No se pudo verificar la cobertura de " + obraSocial + " porque el sistema "
+                + (legada ? "legado" : "del partner") + " no respondio. Verifiquela en recepcion.");
+        return resultado;
     }
 
     /** "OSDE 210" -> "OSDE"; "Swiss Medical SMG02" -> "SWISS MEDICAL"; otra -> tal cual, en mayusculas. */

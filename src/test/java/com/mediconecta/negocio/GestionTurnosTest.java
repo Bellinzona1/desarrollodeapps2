@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -101,8 +102,50 @@ class GestionTurnosTest {
     void unPacienteNoPuedeCancelarTurnosAjenos() {
         Turno turno = agendarManana();
         comoUsuario("otro-paciente", Roles.PACIENTE);
-        assertThrows(ReglaNegocioException.class, () -> gestion.cancelarTurno(turno.getId()));
+        assertThrows(AccesoDenegadoException.class, () -> gestion.cancelarTurno(turno.getId()));
+        comoUsuario("recepcion", Roles.RECEPCION);
         assertEquals(EstadoTurno.PROGRAMADO, gestion.obtenerTurno(turno.getId()).getEstado());
+    }
+
+    @Test
+    void unPacienteNoPuedeVerTurnosAjenosPorId() {
+        Turno turno = agendarManana();
+        comoUsuario("otro-paciente", Roles.PACIENTE);
+        AccesoDenegadoException e = assertThrows(AccesoDenegadoException.class,
+                () -> gestion.obtenerTurno(turno.getId()));
+        assertTrue(e.getMessage().contains("propios"));
+    }
+
+    @Test
+    void unPacienteVeSusPropiosTurnosYLosDemasRolesVenCualquiera() {
+        Turno turno = agendarManana();
+        comoUsuario("paciente", Roles.PACIENTE);
+        assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
+        comoUsuario("otro-medico", Roles.MEDICO);
+        assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
+        comoUsuario("admin", Roles.ADMIN, Roles.PACIENTE);
+        assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
+    }
+
+    @Test
+    void unMedicoNoCancelaTurnosDeOtraAgendaPeroSiDeLaPropia() {
+        Turno turno = agendarManana();
+        comoUsuario("otro-medico", Roles.MEDICO);
+        assertThrows(AccesoDenegadoException.class, () -> gestion.cancelarTurno(turno.getId()));
+        comoUsuario("medico", Roles.MEDICO);
+        assertEquals(EstadoTurno.CANCELADO, gestion.cancelarTurno(turno.getId()).getEstado());
+    }
+
+    @Test
+    void consultasDeAgenda() {
+        Turno turno = agendarManana();
+        assertEquals(1, gestion.listarTurnos().size());
+        assertEquals(1, gestion.turnosDePaciente("30111222").size());
+        assertEquals(1, gestion.turnosDelDia(turno.getFechaHora().toLocalDate()).size());
+        assertEquals(List.of(turno.getFechaHora()),
+                gestion.horariosOcupados(laura.getId(), turno.getFechaHora().toLocalDate()));
+        gestion.cancelarTurno(turno.getId());
+        assertTrue(gestion.horariosOcupados(laura.getId(), turno.getFechaHora().toLocalDate()).isEmpty());
     }
 
     @Test

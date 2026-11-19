@@ -430,6 +430,7 @@ input[type="email"],
 input[type="tel"],
 input[type="date"],
 input[type="time"],
+input[type="number"],
 input[type="datetime-local"],
 select,
 textarea {
@@ -1468,4 +1469,31 @@ table.tabla tbody tr:last-child td {
 
 .dia-atencion:disabled small {
     color: var(--muted);
+}
+
+/* ------------------------------------------------------------------
+   Utilidades (checkpoint 3): reemplazan los style="..." en linea para
+   que la Content-Security-Policy no necesite 'unsafe-inline' en style-src.
+   ------------------------------------------------------------------ */
+.u-mt-12 { margin-top: 12px; }
+.u-mt-16 { margin-top: 16px; }
+.u-mt-20 { margin-top: 20px; }
+.u-mt-24 { margin-top: 24px; }
+.u-mb-8 { margin-bottom: 8px; }
+.u-mb-10 { margin-bottom: 10px; }
+.u-mb-16 { margin-bottom: 16px; }
+.u-mb-20 { margin-bottom: 20px; }
+.u-m-0 { margin: 0; }
+.u-m-8-0-20 { margin: 8px 0 20px; }
+.u-m-6-0-14 { margin: 6px 0 14px; }
+.u-centro { text-align: center; }
+.u-ancho-240 { max-width: 240px; }
+.u-fila-entre { display: flex; justify-content: space-between; gap: 12px; }
+.u-celda-acciones { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.franja--grilla {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
 }

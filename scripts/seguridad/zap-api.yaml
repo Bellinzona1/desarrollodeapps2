@@ -1,0 +1,89 @@
+# =============================================================================
+#  MediConecta - escaneo OWASP ZAP AUTENTICADO de la API (Automation Framework)
+# =============================================================================
+#  Solo contra un entorno local o autorizado. Uso (ZAP 2.14+):
+#
+#    set ZAP_AUTH_HEADER_VALUE=Bearer <token de admin obtenido con /api/auth/login>
+#    set ZAP_AUTH_HEADER_SITE=127.0.0.1:8080
+#    zap.bat -cmd -port 8095 -autorun <ruta>\zap-api.yaml
+#
+#  ZAP agrega la cabecera Authorization a cada pedido (variables de entorno
+#  ZAP_AUTH_HEADER_*), visita las rutas de la API listadas abajo, corre el
+#  escaneo pasivo y el activo y deja los reportes en la carpeta indicada en
+#  "reportDir" (se puede cambiar con la variable ZAP_REPORTES).
+# =============================================================================
+env:
+  contexts:
+    - name: mediconecta
+      urls:
+        - http://127.0.0.1:8080/mediconecta
+      includePaths:
+        - http://127.0.0.1:8080/mediconecta.*
+  vars:
+    base: http://127.0.0.1:8080/mediconecta
+  parameters:
+    failOnError: true
+    progressToStdout: true
+
+jobs:
+  - type: requestor
+    name: rutas-de-la-api
+    requests:
+      - url: ${base}/api/salud
+      - url: ${base}/api/sesion
+      - url: ${base}/api/tablero
+      - url: ${base}/api/turnos
+      - url: ${base}/api/turnos/1
+      - url: ${base}/api/pacientes
+      - url: ${base}/api/pacientes?q=ana
+      - url: ${base}/api/pacientes/30111222
+      - url: ${base}/api/pacientes/30111222/turnos
+      - url: ${base}/api/pacientes/30111222/cobertura
+      - url: ${base}/api/profesionales
+      - url: ${base}/api/profesionales/especialidades
+      - url: ${base}/api/profesionales?especialidad=Cardiologia
+      - url: ${base}/api/profesionales/1
+      - url: ${base}/api/profesionales/1/horarios-libres?fecha=2030-01-07
+      - url: ${base}/api/mensajeria/estado
+      - url: ${base}/api/reserva
+      - url: ${base}/api/turnos
+        method: POST
+        headers:
+          - "Content-Type:application/json"
+        data: '{"documentoPaciente":"30111222","profesionalId":1,"fechaHora":"2030-01-07T09:00","motivo":"zap"}'
+      - url: ${base}/api/pacientes
+        method: POST
+        headers:
+          - "Content-Type:application/json"
+        data: '{"nombre":"Paciente ZAP","documento":"77000001","email":"zap@mail.com"}'
+      - url: ${base}/api/reserva/orientacion
+        method: POST
+        headers:
+          - "Content-Type:application/json"
+        data: '{"mensajes":[{"rol":"usuario","texto":"me duele la rodilla"}]}'
+      - url: ${base}/api/auth/login
+        method: POST
+        headers:
+          - "Content-Type:application/json"
+        data: '{"usuario":"recepcion","clave":"incorrecta"}'
+
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 2
+
+  - type: activeScan
+    parameters:
+      context: mediconecta
+      maxScanDurationInMins: 15
+      threadPerHost: 4
+
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: ${ZAP_REPORTES}
+      reportFile: zap-api
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: ${ZAP_REPORTES}
+      reportFile: zap-api

@@ -11,6 +11,7 @@ import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Componente 2 - Gestion de Pacientes. EJB <b>stateless</b>.
@@ -20,6 +21,15 @@ import java.util.List;
  */
 @Stateless
 public class GestionPacientes {
+
+    /**
+     * DNI: solo digitos, de 6 a 10, sin puntos (asi lo pide la pantalla de alta).
+     * El documento forma parte de la URL de la ficha
+     * ({@code /api/pacientes/{documento}}): antes se aceptaba cualquier texto y el
+     * escaneo de OWASP ZAP dejo en el padron documentos con {@code <script>} y
+     * {@code {}} que ademas provocaban un 500 al armar el {@code Location}.
+     */
+    static final Pattern FORMATO_DOCUMENTO = Pattern.compile("[0-9]{6,10}");
 
     @Inject
     private RepositorioPacientes repositorio;
@@ -43,11 +53,21 @@ public class GestionPacientes {
         return repositorio.buscar(texto.trim());
     }
 
+    /**
+     * Ficha de un paciente por documento.
+     *
+     * <p>Control de BOLA/IDOR: un usuario que es <b>solo</b> PACIENTE solo puede
+     * pedir su propio documento; cualquier otro recibe 403 sin revelar si ese
+     * documento existe. Esto tambien cierra un hueco de la reserva: antes un
+     * PACIENTE que reservaba con un documento ajeno inexistente provocaba el alta
+     * de ese paciente antes de que se rechazara la reserva.</p>
+     */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public Paciente buscarPorDocumento(String documento) {
         if (documento == null || documento.isBlank()) {
             throw new ReglaNegocioException("Debe indicar el documento del paciente.");
         }
+        exigirPropioDocumentoSiEsPaciente(documento.trim());
         return repositorio.buscarPorDocumento(documento.trim())
                 .orElseThrow(() -> NoEncontradoException.paciente(documento));
     }
@@ -72,6 +92,9 @@ public class GestionPacientes {
         }
 
         String documento = paciente.getDocumento().trim();
+        if (!FORMATO_DOCUMENTO.matcher(documento).matches()) {
+            throw new ReglaNegocioException("El documento debe ser un numero de 6 a 10 digitos, sin puntos.");
+        }
         if (repositorio.buscarPorDocumento(documento).isPresent()) {
             throw new ReglaNegocioException("Ya existe un paciente con documento " + documento + ".");
         }
@@ -152,7 +175,7 @@ public class GestionPacientes {
         boolean esElPropio = repositorio.listarTodos().stream()
                 .anyMatch(p -> usuario.equals(p.getUsuario()) && p.getDocumento().equals(documento));
         if (!esElPropio) {
-            throw new ReglaNegocioException("Solo puede operar sobre sus propios turnos.");
+            throw new AccesoDenegadoException("Solo puede operar sobre sus propios datos.");
         }
     }
 

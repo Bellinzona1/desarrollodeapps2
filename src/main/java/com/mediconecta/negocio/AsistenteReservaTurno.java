@@ -6,6 +6,7 @@ import com.mediconecta.modelo.Turno;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Remove;
 import jakarta.ejb.Stateful;
@@ -116,8 +117,16 @@ public class AsistenteReservaTurno implements Serializable {
     /**
      * Cierra la conversacion y le avisa al contenedor que puede descartar la
      * instancia. Despues de este metodo el bean deja de existir.
+     *
+     * <p>{@code @PermitAll}: tambien lo invoca el contenedor cuando expira o se
+     * invalida la sesion HTTP (via {@code ConversacionDeReserva}), y en ese momento
+     * no hay un usuario autenticado. Con el {@code @RolesAllowed} de la clase la
+     * llamada era rechazada ({@code EJBAccessException}) y la conversacion no se
+     * cerraba por {@code @Remove}. No expone datos: solo termina la conversacion
+     * de quien ya la tenia.</p>
      */
     @Remove
+    @PermitAll
     public void finalizar() {
         LOG.info("[STATEFUL] @Remove - fin de la conversacion " + idConversacion
                 + " en el paso " + paso);

@@ -1,9 +1,9 @@
 package com.mediconecta.presentacion;
 
 import com.mediconecta.negocio.CredencialesInvalidasException;
-
-import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
@@ -11,12 +11,14 @@ import jakarta.ws.rs.ext.Provider;
 @Provider
 public class ManejadorCredencialesInvalidas implements ExceptionMapper<CredencialesInvalidasException> {
 
+    @Context
+    private UriInfo uri;
+
     @Override
     public Response toResponse(CredencialesInvalidasException excepcion) {
-        int codigo = Response.Status.UNAUTHORIZED.getStatusCode();
-        return Response.status(codigo)
-                .entity(new ErrorRespuesta(excepcion.getMessage(), codigo))
-                .type(MediaType.APPLICATION_JSON)
+        return Problemas.respuesta(Response.Status.UNAUTHORIZED.getStatusCode(), "credenciales-invalidas",
+                excepcion.getMessage(), uri)
+                .header("WWW-Authenticate", "Bearer realm=\"mediconecta\"")
                 .build();
     }
 }

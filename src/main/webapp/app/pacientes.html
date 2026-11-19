@@ -37,8 +37,9 @@
                         </div>
                         <div class="campo">
                             <label for="documento">Documento</label>
-                            <input type="text" id="documento" required maxlength="20"
-                                   inputmode="numeric" placeholder="30111222">
+                            <input type="text" id="documento" required maxlength="10"
+                                   inputmode="numeric" pattern="[0-9]{6,10}"
+                                   title="Solo numeros, de 6 a 10 digitos, sin puntos" placeholder="30111222">
                         </div>
                     </div>
                     <div class="fila">

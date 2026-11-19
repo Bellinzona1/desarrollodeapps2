@@ -1,0 +1,14 @@
+1) legado SOAP disponible (OSDE) | doc=30111222 | 0.13 s | {"contingencia":false,"copago":0.0,"origen":"LEGADO","plan":"OSDE 210","vigente":true}
+"outcome" => "success"
+2) legado caido, con dato previo | doc=30111222 | 0.12 s | {"contingencia":true,"copago":0.0,"mensaje":"La obra social no respondio. Dato de la ultima consulta exitosa (18/11 20:50).","origen":"LEGADO","plan":"OSDE 210","vigente":true}
+3) legado caido, sin dato previo (PAMI) | doc=33222111 | 0.11 s | {"contingencia":true,"copago":0.0,"mensaje":"No se pudo verificar la cobertura de PAMI porque el sistema legado no respondio. Verifiquela en recepcion.","origen":"SIN_VERIFICAR","vigente":false}
+4) legado caido otra vez | doc=33222111 | 0.11 s | {"contingencia":true,"copago":0.0,"mensaje":"No se pudo verificar la cobertura de PAMI porque el sistema legado no respondio. Verifiquela en recepcion.","origen":"SIN_VERIFICAR","vigente":false}
+5) tercera falla seguida -> circuito abierto | doc=33222111 | 0.07 s | {"contingencia":true,"copago":0.0,"mensaje":"No se pudo verificar la cobertura de PAMI porque el sistema legado no respondio. Verifiquela en recepcion.","origen":"SIN_VERIFICAR","vigente":false}
+6) circuito abierto: respuesta inmediata sin llamar | doc=33222111 | 0.07 s | {"contingencia":true,"copago":0.0,"mensaje":"No se pudo verificar la cobertura de PAMI porque el sistema legado no respondio. Verifiquela en recepcion.","origen":"SIN_VERIFICAR","vigente":false}
+"outcome" => "success"
+2026-11-18 20:48:39,125 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-14) [RESILIENCIA] asistente-ia fallo: El asistente de IA no esta configurado en el servidor. Elegi la especialidad de la lista.
+2026-11-18 20:50:36,841 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-33) [RESILIENCIA] asistente-ia fallo: El sistema externo asistente-ia no respondio en 5 segundos.
+2026-11-18 20:50:38,594 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-23) [RESILIENCIA] asistente-ia fallo: El asistente de IA no esta disponible en este momento. Elegi la especialidad de la lista.
+2026-11-18 20:50:58,708 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-42) [RESILIENCIA] obra-social-legado fallo: El sistema legado de obras sociales no respondio.
+2026-11-18 20:50:58,892 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-33) [RESILIENCIA] obra-social-legado fallo: El sistema legado de obras sociales no respondio.
+2026-11-18 20:50:59,062 WARNING [com.mediconecta.integraciones.ProteccionIntegracion] (default task-42) [RESILIENCIA] obra-social-legado fallo: El sistema legado de obras sociales no respondio. -> circuito ABIERTO por 30 s

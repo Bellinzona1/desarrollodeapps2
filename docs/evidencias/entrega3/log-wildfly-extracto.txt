@@ -1,0 +1,43 @@
+# Extracto de standalone/log/server.log (WildFly 36.0.1.Final, standalone-full.xml, 2026-11-18)
+# 1) Despliegue
+2026-11-18 20:13:07,820 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly 36.0.1.Final (WildFly Core 28.0.1.Final) started in 3494ms - Started 364 of 579 services (338 services are lazy, passive or on-demand) - Server configuration file in use
+2026-11-18 20:13:21,983 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly 36.0.1.Final (WildFly Core 28.0.1.Final) started in 327ms - Started 364 of 579 services (338 services are lazy, passive or on-demand) - Server configuration file in use:
+2026-11-18 20:13:32,683 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly 36.0.1.Final (WildFly Core 28.0.1.Final) started in 257ms - Started 364 of 579 services (338 services are lazy, passive or on-demand) - Server configuration file in use:
+2026-11-18 20:13:54,302 INFO  [org.jboss.ws.cxf.deployment] (MSC service thread 1-2) JBWS024074: WSDL published to: file:/C:/Users/Usuario/AppData/Local/Temp/claude/e1959aa4e49ecedd/cd16fbb0-48d3-4720-9f91-4d87b230c010/scratchpad/wf/wildfly-36.0.1.Final/standa
+2026-11-18 20:13:55,062 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 97) [DEMO] Usuarios de demostracion creados: paciente, recepcion, medico, admin.
+2026-11-18 20:13:55,064 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 97) [DEMO] Juego de datos de ejemplo cargado: 4 profesionales, 4 pacientes, 3 turnos.
+2026-11-18 20:13:55,409 INFO  [org.jboss.as.server] (DeploymentScanner-threads - 1) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:20,541 INFO  [org.jboss.ws.cxf.deployment] (MSC service thread 1-4) JBWS024074: WSDL published to: file:/C:/Users/Usuario/AppData/Local/Temp/claude/e1959aa4e49ecedd/cd16fbb0-48d3-4720-9f91-4d87b230c010/scratchpad/wf/wildfly-36.0.1.Final/standa
+2026-11-18 20:16:21,421 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 92) [DEMO] Usuarios de demostracion creados: paciente, recepcion, medico, admin.
+2026-11-18 20:16:21,423 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 92) [DEMO] Juego de datos de ejemplo cargado: 4 profesionales, 4 pacientes, 3 turnos.
+2026-11-18 20:16:21,757 INFO  [org.jboss.as.server] (ServerService Thread Pool -- 47) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:21,799 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly 36.0.1.Final (WildFly Core 28.0.1.Final) started in 5583ms - Started 765 of 968 services (347 services are lazy, passive or on-demand) - Server configuration file in use
+2026-11-18 20:16:49,454 INFO  [org.jboss.ws.cxf.deployment] (MSC service thread 1-3) JBWS024074: WSDL published to: file:/C:/Users/Usuario/AppData/Local/Temp/claude/e1959aa4e49ecedd/cd16fbb0-48d3-4720-9f91-4d87b230c010/scratchpad/wf/wildfly-36.0.1.Final/standa
+2026-11-18 20:16:50,224 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 95) [DEMO] Usuarios de demostracion creados: paciente, recepcion, medico, admin.
+2026-11-18 20:16:50,226 INFO  [com.mediconecta.negocio.CargaDeDatosDemo] (ServerService Thread Pool -- 95) [DEMO] Juego de datos de ejemplo cargado: 4 profesionales, 4 pacientes, 3 turnos.
+2026-11-18 20:16:50,580 INFO  [org.jboss.as.server] (ServerService Thread Pool -- 47) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:50,620 INFO  [org.jboss.as] (Controller Boot Thread) WFLYSRV0025: WildFly 36.0.1.Final (WildFly Core 28.0.1.Final) started in 5434ms - Started 765 of 968 services (347 services are lazy, passive or on-demand) - Server configuration file in use
+
+# 2) Mensaje veneno: 3 entregas fallidas (rollback) y paso a la DLQ
+2026-11-18 20:14:09,089 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-0 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:14:09,098 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-1 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:14:09,101 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-2 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:14:09,115 SEVERE [com.mediconecta.mensajeria.MonitorColaMuerta] (Thread-0 (ActiveMQ-client-global-threads)) [JMS-DLQ] mensaje sin procesar movido a la DLQ: clave=prueba-dlq-addd0215-56da-41f3-8d08-2e6f3d6c64b5 -> MEN
+2026-11-18 20:15:41,701 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-3 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:15:41,705 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-5 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:15:41,710 ERROR [org.apache.activemq.artemis.ra.ActiveMQRALogger] (Thread-4 (ActiveMQ-client-global-threads)) AMQ154004: Failed to deliver message: jakarta.ejb.EJBTransactionRolledbackException: El mensaje no tiene e
+2026-11-18 20:15:41,716 SEVERE [com.mediconecta.mensajeria.MonitorColaMuerta] (Thread-3 (ActiveMQ-client-global-threads)) [JMS-DLQ] mensaje sin procesar movido a la DLQ: clave=prueba-dlq-2b2e9443-2de6-4b32-9e2a-b6acb23b762b -> MEN
+
+# 3) Recuperacion: mensajes pendientes procesados despues del reinicio
+2026-11-18 20:13:55,409 INFO  [org.jboss.as.server] (DeploymentScanner-threads - 1) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:09,297 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoProfesional] (Thread-4 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el profesional -> Turno 22: Carla Lopez con Dra. Sofia Aguirre (Pedia
+2026-11-18 20:16:09,297 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoPaciente] (Thread-8 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el paciente -> Turno 22: Carla Lopez con Dra. Sofia Aguirre (Pediatria) 
+2026-11-18 20:16:21,757 INFO  [org.jboss.as.server] (ServerService Thread Pool -- 47) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:21,887 INFO  [com.mediconecta.mensajeria.ReceptorConfirmacion] (Thread-1 (ActiveMQ-client-global-threads)) [JMS-COLA] confirmacion enviada -> Turno 22: Carla Lopez con Dra. Sofia Aguirre (Pediatria) el 20/11/2026 
+2026-11-18 20:16:40,361 INFO  [com.mediconecta.mensajeria.ReceptorConfirmacion] (Thread-1 (ActiveMQ-client-global-threads)) [JMS-COLA] confirmacion enviada -> Turno 4: Diego Sosa con Dr. Martin Ruiz (Traumatologia) el 19/11/2026 1
+2026-11-18 20:16:40,362 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoProfesional] (Thread-0 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el profesional -> Turno 4: Diego Sosa con Dr. Martin Ruiz (Traumatolo
+2026-11-18 20:16:50,580 INFO  [org.jboss.as.server] (ServerService Thread Pool -- 47) WFLYSRV0010: Deployed "mediconecta.war" (runtime-name : "mediconecta.war")
+2026-11-18 20:16:50,674 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoPaciente] (Thread-1 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el paciente -> Turno 4: Diego Sosa con Dr. Martin Ruiz (Traumatologia) e
+2026-11-18 20:17:45,307 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoProfesional] (Thread-4 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el profesional -> Turno 22: Ana Gomez con Dr. Julian Paz (Clinica Med
+2026-11-18 20:17:45,307 INFO  [com.mediconecta.mensajeria.ReceptorConfirmacion] (Thread-3 (ActiveMQ-client-global-threads)) [JMS-COLA] confirmacion enviada -> Turno 22: Ana Gomez con Dr. Julian Paz (Clinica Medica) el 02/06/2027 0
+2026-11-18 20:17:45,312 INFO  [com.mediconecta.mensajeria.SuscriptorAvisoPaciente] (Thread-0 (ActiveMQ-client-global-threads)) [JMS-TOPICO] recordatorio para el paciente -> Turno 22: Ana Gomez con Dr. Julian Paz (Clinica Medica) e

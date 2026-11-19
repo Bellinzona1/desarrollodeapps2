@@ -148,6 +148,9 @@ C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --resolve-parameter-values -
 
 # 3) Seguridad JWT (servidor encendido)
 C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --file=scripts\wildfly\configurar-seguridad.cli
+
+# 4) Mensajeria: journal persistente, 3 reintentos y DLQ (servidor encendido, standalone-full.xml)
+C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --file=scripts\wildfly\configurar-mensajeria.cli
 ```
 
 El archivo `.cli` toma la URL, el usuario y la contraseña de PostgreSQL como propiedades
@@ -157,7 +160,8 @@ del sistema (`-Dmediconecta.db.usuario=...`), con valores por omisión de desarr
 Opcional: el secreto con el que se firman los JWT se fija con la propiedad del sistema
 `mediconecta.jwt.secreto` (por ejemplo, `bin\standalone.bat -c standalone-full.xml
 -Dmediconecta.jwt.secreto=...`, al menos 32 caracteres) o la variable de entorno
-`MEDICONECTA_JWT_SECRETO`. Sin ella se usa un secreto de desarrollo y el log lo advierte.
+`MEDICONECTA_JWT_SECRETO`. Sin ella se genera un secreto aleatorio en cada arranque (los
+tokens dejan de valer al reiniciar) y el log lo advierte: no hay ningún secreto fijo en el código.
 **No hay ninguna credencial de base de datos dentro del código Java versionado.**
 
 #### Asistente de IA (opcional)
@@ -317,7 +321,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | GET | `/api/reserva` | PACIENTE, RECEPCION, ADMIN | Estado actual **según lo recuerda el servidor** |
 | POST | `/api/reserva/iniciar` | ídem | Paso 0: identifica al paciente |
 | PUT | `/api/reserva/especialidad` | ídem | Paso 1 |
-| POST | `/api/reserva/orientacion` | ídem | Paso 1 con IA: recibe `{"mensajes":[{"rol":"usuario","texto":"..."}]}` y devuelve `{"mensaje","especialidad","urgente"}`. Solo sugiere especialidades con profesionales activos; elegirla sigue siendo `PUT /especialidad`. `502` si el proveedor de IA no responde |
+| POST | `/api/reserva/orientacion` | ídem | Paso 1 con IA: recibe `{"mensajes":[{"rol":"usuario","texto":"..."}]}` y devuelve `{"mensaje","especialidad","urgente","origen"}`. Solo sugiere especialidades con profesionales activos; elegirla sigue siendo `PUT /especialidad`. Si la IA falla o tarda más de 5 s responde el fallback por reglas (`origen: "REGLAS"`). `429` a partir de 10 consultas por minuto |
 | PUT | `/api/reserva/profesional` | ídem | Paso 2 |
 | GET | `/api/reserva/horarios?fecha=…` | ídem | Horarios libres del profesional **ya recordado** |
 | PUT | `/api/reserva/horario` | ídem | Paso 3 |
@@ -331,17 +335,47 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 |---|---|---|---|
 | GET | `/api/tablero` | RECEPCION, MEDICO, ADMIN | Métricas y próximos turnos, en una sola llamada |
 
-### Formato de los errores
+### Mensajería (diagnóstico, checkpoint 3)
 
-Todos los errores devuelven el mismo cuerpo:
+| Método | Ruta | Roles | Qué hace |
+|---|---|---|---|
+| GET | `/api/mensajeria/estado` | ADMIN | Mensajes procesados por cada consumidor y últimos mensajes llegados a la DLQ |
+| POST | `/api/mensajeria/prueba-dlq` | ADMIN | `202 {"clave":"prueba-dlq-..."}`: envía un mensaje inválido que, tras 3 reintentos, termina en la DLQ |
+
+### Formato de los errores (Problem Details, RFC 9457)
+
+Todos los errores son `application/problem+json`:
 
 ```json
-{ "error": "No se puede agendar un turno en el pasado.", "codigo": 400 }
+{ "type": "urn:mediconecta:problema:regla-de-negocio", "title": "Bad Request", "status": 400,
+  "detail": "No se puede agendar un turno en el pasado.", "instance": "/mediconecta/api/turnos",
+  "error": "No se puede agendar un turno en el pasado.", "codigo": 400 }
 ```
 
-`400` regla de negocio incumplida · `401` sin token, token inválido o vencido, o
-credenciales incorrectas · `403` rol sin permiso · `404` no existe · **`409` transición de
-estado inválida (patrón State)** · `502` falla un sistema externo.
+`error` y `codigo` son miembros de extensión que repiten `detail` y `status` para no romper
+a los clientes de las entregas anteriores.
+
+`400` regla de negocio o JSON inválido · `401` sin token, token inválido o vencido, o
+credenciales incorrectas · `403` rol sin permiso **o recurso ajeno (BOLA)** · `404` no existe
+· `405`/`415` método o tipo de contenido no soportado · **`409` transición de estado inválida
+(patrón State)** o Idempotency-Key en curso · `412` `If-Match` desactualizado · `422`
+Idempotency-Key reutilizada con otro cuerpo · `429` demasiados intentos (con `Retry-After`) ·
+`500` error inesperado (sin detalle interno, con código de incidente) · `502` sistema externo
+sin fallback.
+
+### Cabeceras HTTP (checkpoint 3)
+
+- **`Idempotency-Key`** en `POST /api/turnos` (opcional, hasta 255 caracteres): un reintento
+  con la misma clave y el mismo cuerpo devuelve el turno ya creado con
+  `Idempotency-Replayed: true`; con otro cuerpo, `422`. Las claves duran 24 h y son por
+  usuario. El frontend la envía siempre.
+- **`ETag`** en `GET /api/turnos/{id}` y `GET /api/pacientes/{documento}`.
+  `If-None-Match` vigente → `304`. `If-Match` en `PUT /api/turnos/{id}/(cancelar|atender|archivar)`
+  y `PUT /api/pacientes/{documento}` → `412` si el recurso cambió. Sin esas cabeceras todo
+  funciona igual que antes.
+- Respuestas de la API con `Cache-Control: no-store` (o `private, no-cache` si tienen ETag).
+  Todas las respuestas llevan CSP, `X-Content-Type-Options`, `X-Frame-Options` y
+  `Referrer-Policy`.
 
 ### Compatibilidad con la API de la Entrega 1
 
@@ -421,14 +455,41 @@ src/test/java/                                58 tests unitarios JUnit 5
 ### Tests unitarios (sin servidor ni base de datos)
 
 ```powershell
-mvn test                                                  # los 58
-mvn test -Dtest=EstadoDelTurnoTest                        # una clase
-mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
+.\mvnw.cmd clean verify                                       # 203 tests + cobertura (falla bajo 80 % lineas / 70 % ramas)
+.\mvnw.cmd test -Dtest=EstadoDelTurnoTest                     # una clase
+.\mvnw.cmd test -Dtest=GestionTurnosTest#cancelarLiberaElHorario
+.\mvnw.cmd test-compile org.pitest:pitest-maven:mutationCoverage   # mutation testing (falla bajo 60 %)
 ```
 
-Cubren el patrón State, las reglas de `GestionTurnos`, el Factory, la emisión y validación
-de JWT, el hash de contraseñas, la autenticación, el ruteo del Adapter de cobertura y las reglas del asistente de IA (sin llamar al proveedor). Los EJB
-se prueban como objetos comunes con los repositorios en memoria.
+El Maven Wrapper (`mvnw`/`mvnw.cmd`) descarga Maven 3.9.9: no hace falta tenerlo instalado.
+Reportes: `target/site/jacoco/index.html` (cobertura) y `target/pit-reports/index.html`
+(mutación). Resultados del 18/11/2026: **203 tests OK, 84,3 % de líneas, 83,1 % de ramas
+(capa de negocio 94,3 % / 90,2 %), mutation score 77 %**. Detalle en [`docs/plan-de-pruebas.md`](docs/plan-de-pruebas.md).
+
+Cubren el patrón State, las reglas de negocio, el Factory, JWT, el hash de contraseñas, la
+fuerza bruta, BOLA y BFLA, la idempotencia, la resiliencia de las integraciones (timeout,
+circuit breaker, fallback), la mensajería y la API REST real (Problem Details, ETag,
+Idempotency-Key) sobre el dispatcher en memoria de RESTEasy. Ninguna prueba llama al
+proveedor de IA real ni necesita base de datos.
+
+### Carga
+
+```powershell
+python scripts\carga\prueba-carga.py --usuarios 20 --segundos 60 --escrituras
+```
+
+Falla si el p95 supera 500 ms o hay más de 1 % de errores. Usar `127.0.0.1` y no
+`localhost` en Windows (resolución IPv6 lenta).
+
+### Seguridad
+
+```powershell
+python scripts\seguridad\pruebas-seguridad.py --secreto-jwt <secreto del servidor>   # 47 casos: JWT, BFLA, BOLA, inyeccion, cabeceras
+```
+
+OWASP ZAP autenticado sobre la API: `scripts/seguridad/zap-api.yaml` (instrucciones en el
+archivo). Proveedor de IA simulado para probar el gateway y el fallback sin clave:
+`python scripts\ia\proveedor-ia-simulado.py --modo ok|lento|error`.
 
 ### Prueba de humo (contra la aplicación desplegada)
 
@@ -443,8 +504,10 @@ profesionales, cobertura SOAP/REST, los cuatro pasos del asistente stateful y, c
 `-LogWildFly`, que la cola y el tópico JMS entregaron los mensajes. Devuelve código de salida
 0 si todas pasan.
 
-Última ejecución (11/11/2026) sobre WildFly 36.0.1.Final (`standalone-full.xml`) + JDK 24 +
-PostgreSQL 16: **95 pruebas OK, 0 fallidas**.
+Última ejecución (18/11/2026) sobre WildFly 36.0.1.Final (`standalone-full.xml`) + JDK 21
+con los repositorios en memoria: **119 pruebas OK, 0 fallidas**
+([evidencia](docs/evidencias/entrega3/smoke-test-wildfly36.txt)). La ejecución anterior
+contra PostgreSQL 16 (11/11/2026) dio 95/95 con la versión de la Entrega 2.
 
 ---
 
@@ -455,11 +518,15 @@ proyecto puede correr con los repositorios en memoria. Son dos cambios y **no se
 una línea de la capa de negocio ni de la de presentación**, que es justamente la prueba de
 que el patrón DAO funciona:
 
-1. En `src/main/webapp/WEB-INF/beans.xml`, descomentar el bloque `<alternatives>`
-   (incluye los usuarios en memoria).
+1. En `src/main/webapp/WEB-INF/beans.xml`, descomentar el bloque del plan B: activa los
+   repositorios en memoria (`<alternatives>`) y saca del escaneo de CDI los repositorios
+   JPA (`<scan><exclude>`).
 2. Borrar `src/main/resources/META-INF/persistence.xml` antes de empaquetar (si queda,
    WildFly intenta crear la unidad de persistencia y el despliegue falla al no encontrar el
    datasource).
+
+Verificado el 18/11/2026 en WildFly 36 siguiendo exactamente estos dos pasos (antes de
+agregar la exclusión, el despliegue fallaba con `WFLYWELD0037`).
 
 Los datos se pierden al reiniciar el servidor. Es un plan de contingencia, no el modo
 normal de la entrega.
