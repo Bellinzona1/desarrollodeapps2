@@ -99,8 +99,13 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
                 Reglas:
                 - No diagnostiques, no nombres enfermedades probables y no indiques tratamientos ni medicamentos.
                 - Si con lo que te contaron no alcanza para elegir, hacé una sola pregunta corta y concreta, y dejá "especialidad" en null.
-                - Si ninguna especialidad de la lista encaja, sugerí Clinica Medica si está en la lista; si no está, explicá que no hay una adecuada y dejá "especialidad" en null.
-                - Si aparece algún signo de emergencia (dolor fuerte en el pecho, falta de aire, desmayo, convulsiones, sangrado abundante, signos de ACV como boca torcida o debilidad de un lado del cuerpo, ideas de hacerse daño, o un bebé con fiebre muy alta o muy decaído), poné "urgente" en true y decí que no espere un turno: que llame al 107 (SAME) o al 911, o que vaya a la guardia más cercana.
+                - Si ninguna especialidad de la lista encaja, sugerí Clinica Medica si está en la lista; \
+                si no está, explicá que no hay una adecuada y dejá "especialidad" en null.
+                - Si aparece algún signo de emergencia (dolor fuerte en el pecho, falta de aire, desmayo, \
+                convulsiones, sangrado abundante, signos de ACV como boca torcida o debilidad de un lado del \
+                cuerpo, ideas de hacerse daño, o un bebé con fiebre muy alta o muy decaído), poné "urgente" \
+                en true y decí que no espere un turno: que llame al 107 (SAME) o al 911, o que vaya a la \
+                guardia más cercana.
                 - Si te piden algo que no tiene que ver con elegir una especialidad, explicá con amabilidad que solo podés ayudar con eso.
                 - Hablá en español rioplatense, con calidez, en no más de tres oraciones.
 

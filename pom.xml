@@ -19,6 +19,22 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>17</maven.compiler.release>
+
+        <!-- Versiones de las herramientas de calidad y de migraciones. Ninguna
+             entra al WAR: son plugins del build. -->
+        <version.jacoco>0.8.14</version.jacoco>
+        <version.checkstyle>10.26.1</version.checkstyle>
+        <version.flyway>11.20.3</version.flyway>
+        <version.driver.postgresql>42.7.4</version.driver.postgresql>
+
+        <!-- Base de desarrollo por omision para "mvn flyway:migrate". La
+             contrasena NO esta aca: se pasa con -Dflyway.password=... o con la
+             variable de entorno FLYWAY_PASSWORD. -->
+        <flyway.url>jdbc:postgresql://127.0.0.1:5432/mediconecta</flyway.url>
+        <flyway.user>mediconecta</flyway.user>
+
+        <!-- Minimo de lineas cubiertas por los tests unitarios (ver JaCoCo). -->
+        <cobertura.minima>0.80</cobertura.minima>
     </properties>
 
     <dependencies>
@@ -67,6 +83,139 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+            </plugin>
+
+            <!-- ===== Linter: Checkstyle =====
+                 Corre en la fase "validate", o sea antes de compilar: cualquier
+                 "mvn package" o "mvn verify" falla si el codigo no respeta las
+                 reglas de config/checkstyle/checkstyle.xml. Se queda en la rama
+                 10.x porque la 11 exige Java 21 y el proyecto compila con 17. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>${version.checkstyle}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>config/checkstyle/checkstyle.xml</configLocation>
+                    <consoleOutput>true</consoleOutput>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>warning</violationSeverity>
+                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>linter</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- ===== Cobertura: JaCoCo =====
+                 "mvn test" deja el informe en target/site/jacoco/index.html.
+                 "mvn verify" ademas exige el minimo de cobertura de abajo.
+                 Las clases que solo tienen sentido dentro del contenedor
+                 (recursos REST, repositorios JPA, MDB, sistemas simulados) se
+                 excluyen del MINIMO, no del informe: esas las cubre la prueba
+                 de punta a punta (scripts/smoke-test.ps1) que corre en CI. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${version.jacoco}</version>
+                <executions>
+                    <execution>
+                        <id>agente</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>informe</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>minimo</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/mediconecta/presentacion/Recurso*</exclude>
+                                <exclude>com/mediconecta/presentacion/AplicacionRest*</exclude>
+                                <exclude>com/mediconecta/presentacion/ConversacionDeReserva*</exclude>
+                                <exclude>com/mediconecta/datos/jpa/**</exclude>
+                                <exclude>com/mediconecta/integraciones/simulacion/**</exclude>
+                                <exclude>com/mediconecta/integraciones/AdaptadorObraSocial*</exclude>
+                                <exclude>com/mediconecta/mensajeria/DestinosJms*</exclude>
+                                <exclude>com/mediconecta/mensajeria/NotificadorTurnos*</exclude>
+                                <exclude>com/mediconecta/negocio/CargaDeDatosDemo*</exclude>
+                            </excludes>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${cobertura.minima}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- ===== Migraciones: Flyway =====
+                 El esquema ya no lo crea Hibernate: lo crean los scripts
+                 versionados de db/migraciones (V1__..., V2__...). Hibernate solo
+                 lo VALIDA al desplegar (hbm2ddl.auto=validate).
+
+                     mvn flyway:migrate -Dflyway.password=...
+                     mvn flyway:info    -Dflyway.password=...
+
+                 El plugin no entra al WAR. En Docker las aplica el servicio
+                 "migraciones" de compose.yaml con la imagen oficial de Flyway,
+                 sobre los mismos archivos. baselineOnMigrate hace que una base
+                 que ya tenia las tablas creadas por Hibernate (Entregas 1 y 2)
+                 se tome como version 1 y solo reciba las migraciones nuevas. -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>${version.flyway}</version>
+                <configuration>
+                    <locations>
+                        <location>filesystem:db/migraciones</location>
+                    </locations>
+                    <baselineOnMigrate>true</baselineOnMigrate>
+                    <baselineVersion>1</baselineVersion>
+                    <cleanDisabled>true</cleanDisabled>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-database-postgresql</artifactId>
+                        <version>${version.flyway}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${version.driver.postgresql}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

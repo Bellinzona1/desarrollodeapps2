@@ -1,0 +1,48 @@
+# =============================================================================
+#  MediConecta - reintentos y cola de mensajes muertos (DLQ) de JMS
+# =============================================================================
+#
+#  Los destinos (ColaConfirmaciones, TopicoRecordatorios y la DLQ
+#  MensajesFallidos) los crea el propio WAR con @JMSDestinationDefinition.
+#  Lo que no se puede declarar con anotaciones es la politica de entrega de
+#  Artemis ("address-settings"), que se fija aca:
+#
+#    * max-delivery-attempts=4: la entrega original + 3 reintentos;
+#    * redelivery-delay=1000 con multiplier 2.0: espera 1 s, 2 s y 4 s entre
+#      intentos (backoff exponencial, tope 8 s) para no martillar a un
+#      consumidor que esta fallando por una causa pasajera (la base caida);
+#    * dead-letter-address: despues del ultimo intento el mensaje va a
+#      MensajesFallidos, donde lo registra MonitorMensajesFallidos.
+#
+#  Sin este script la aplicacion funciona igual, pero con la politica por
+#  defecto de WildFly (10 intentos seguidos y la DLQ generica jms.queue.DLQ).
+#
+#  Se usa en dos lugares:
+#    * local:  jboss-cli --connect --file=configurar-mensajeria.cli
+#              (lo llama configurar-wildfly.ps1);
+#    * Docker: el Dockerfile lo ejecuta con el servidor embebido.
+# =============================================================================
+
+if (outcome == success) of /subsystem=messaging-activemq/server=default/address-setting=jms.queue.ColaConfirmacionesMediConecta:read-resource
+    /subsystem=messaging-activemq/server=default/address-setting=jms.queue.ColaConfirmacionesMediConecta:remove
+end-if
+/subsystem=messaging-activemq/server=default/address-setting=jms.queue.ColaConfirmacionesMediConecta:add( \
+    dead-letter-address=jms.queue.MensajesFallidosMediConecta, \
+    expiry-address=jms.queue.ExpiryQueue, \
+    max-delivery-attempts=4, \
+    redelivery-delay=1000, \
+    redelivery-multiplier=2.0, \
+    max-redelivery-delay=8000)
+
+if (outcome == success) of /subsystem=messaging-activemq/server=default/address-setting=jms.topic.TopicoRecordatoriosMediConecta:read-resource
+    /subsystem=messaging-activemq/server=default/address-setting=jms.topic.TopicoRecordatoriosMediConecta:remove
+end-if
+/subsystem=messaging-activemq/server=default/address-setting=jms.topic.TopicoRecordatoriosMediConecta:add( \
+    dead-letter-address=jms.queue.MensajesFallidosMediConecta, \
+    expiry-address=jms.queue.ExpiryQueue, \
+    max-delivery-attempts=4, \
+    redelivery-delay=1000, \
+    redelivery-multiplier=2.0, \
+    max-redelivery-delay=8000)
+
+echo "Reintentos (4 entregas, backoff 1-2-4 s) y DLQ MensajesFallidos configurados."

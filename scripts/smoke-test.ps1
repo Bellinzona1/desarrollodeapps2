@@ -7,12 +7,18 @@
      desplegada. Verifica salud, autenticacion JWT, seguridad por roles,
      turnos (incluido el patron State: 409 ante transiciones invalidas),
      pacientes, profesionales, cobertura (SOAP + REST), el asistente stateful
-     y, si se indica el log de WildFly, la mensajeria JMS.
+     y la mensajeria JMS (los avisos que generan los consumidores).
+
+     Los errores de la API vienen en Problem Details (RFC 9457): el texto
+     esta en "detail" y el codigo en "status".
+
+     Hay una version para Linux/macOS con mas pruebas (cabeceras de
+     seguridad, Idempotency-Key, DLQ): scripts/smoke-test.sh. Es la que corre
+     el pipeline de CI.
 
      Uso:
          .\smoke-test.ps1
          .\smoke-test.ps1 -BaseUrl http://localhost:8080/mediconecta
-         .\smoke-test.ps1 -LogWildFly C:\wildfly-36.0.1.Final\standalone\log\server.log
 
      Devuelve codigo de salida 0 si todas las pruebas pasan, 1 si alguna falla.
      Escrito para Windows PowerShell 5.1 (el que trae Windows por defecto).
@@ -21,9 +27,7 @@
 
 param(
     [string] $BaseUrl = "http://localhost:8080/mediconecta",
-    [string] $Clave   = "Demo.2026",
-    # Opcional: con el server.log de WildFly se verifica tambien la mensajeria.
-    [string] $LogWildFly = ""
+    [string] $Clave   = "Demo.2026"
 )
 
 $ErrorActionPreference = "Continue"
@@ -129,8 +133,9 @@ Titulo "SALUD (endpoint publico, sin autenticacion)"
 
 try {
     $salud = Invoke-WebRequest -Uri "$BaseUrl/api/salud" -UseBasicParsing
+    $estadoSalud = $salud.Content | ConvertFrom-Json
     Probar "GET /api/salud responde 200" ([int]$salud.StatusCode -eq 200)
-    Probar "GET /api/salud devuelve el saludo del contenedor" ($salud.Content -match "Hola desde el contenedor")
+    Probar "La base de datos y el broker JMS estan UP" ($estadoSalud.estado -eq "UP" -and $estadoSalud.componentes.baseDeDatos -eq "UP" -and $estadoSalud.componentes.mensajeria -eq "UP") $salud.Content
 } catch {
     Probar "GET /api/salud responde 200" $false $_.Exception.Message
     Write-Host ""
@@ -278,7 +283,7 @@ Probar "GET /api/turnos/{id} devuelve un turno existente" ($unTurno.Codigo -eq 2
 
 $turnoFantasma = Invocar -Metodo GET -Ruta "/api/turnos/999999" -Sesion $recepcion
 Probar "GET /api/turnos/999999 devuelve 404" ($turnoFantasma.Codigo -eq 404) "codigo=$($turnoFantasma.Codigo)"
-Probar "El 404 trae el mensaje de negocio" ($turnoFantasma.Datos.error -like "*No existe un turno*") "$($turnoFantasma.Texto)"
+Probar "El 404 trae el mensaje de negocio" ($turnoFantasma.Datos.detail -like "*No existe un turno*") "$($turnoFantasma.Texto)"
 
 $horarioElegido = $horarios[0]
 $pedido = @{ documentoPaciente = $documento; profesionalId = $profesionalId; fechaHora = $horarioElegido; motivo = "Prueba de humo" }
@@ -289,13 +294,13 @@ Probar "El turno nace en estado PROGRAMADO" ($creado.Datos.estado -eq "PROGRAMAD
 
 $superpuesto = Invocar -Metodo POST -Ruta "/api/turnos" -Cuerpo $pedido -Sesion $recepcion
 Probar "Un turno superpuesto del mismo profesional devuelve 400" ($superpuesto.Codigo -eq 400) "codigo=$($superpuesto.Codigo)"
-Probar "El mensaje explica la superposicion" ($superpuesto.Datos.error -like "*ya tiene un turno en ese horario*") "$($superpuesto.Texto)"
+Probar "El mensaje explica la superposicion" ($superpuesto.Datos.detail -like "*ya tiene un turno en ese horario*") "$($superpuesto.Texto)"
 
 $enElPasado = Invocar -Metodo POST -Ruta "/api/turnos" `
     -Cuerpo @{ documentoPaciente = $documento; profesionalId = $profesionalId; fechaHora = "2020-01-06T10:00" } `
     -Sesion $recepcion
 Probar "Un turno en el pasado devuelve 400" ($enElPasado.Codigo -eq 400) "codigo=$($enElPasado.Codigo)"
-Probar "El mensaje explica que no se agenda en el pasado" ($enElPasado.Datos.error -like "*pasado*") "$($enElPasado.Texto)"
+Probar "El mensaje explica que no se agenda en el pasado" ($enElPasado.Datos.detail -like "*pasado*") "$($enElPasado.Texto)"
 
 $fechaInvalida = Invocar -Metodo POST -Ruta "/api/turnos" `
     -Cuerpo @{ documentoPaciente = $documento; profesionalId = $profesionalId; fechaHora = "15/12/2026" } `
@@ -330,7 +335,7 @@ $cancelado = Invocar -Metodo PUT -Ruta "/api/turnos/$idCreado/cancelar" -Sesion 
 Probar "PUT /api/turnos/{id}/cancelar cancela el turno" ($cancelado.Codigo -eq 200 -and $cancelado.Datos.estado -eq "CANCELADO") "codigo=$($cancelado.Codigo) estado=$($cancelado.Datos.estado)"
 
 $recancelado = Invocar -Metodo PUT -Ruta "/api/turnos/$idCreado/cancelar" -Sesion $recepcion
-Probar "Cancelar dos veces devuelve 409 (patron State) con un mensaje claro" ($recancelado.Codigo -eq 409 -and $recancelado.Datos.error -like "*ya estaba cancelado*") "codigo=$($recancelado.Codigo)"
+Probar "Cancelar dos veces devuelve 409 (patron State) con un mensaje claro" ($recancelado.Codigo -eq 409 -and $recancelado.Datos.detail -like "*ya estaba cancelado*") "codigo=$($recancelado.Codigo)"
 
 $reutilizado = Invocar -Metodo POST -Ruta "/api/turnos" -Cuerpo $pedido -Sesion $recepcion
 Probar "El horario de un turno cancelado vuelve a estar libre (201)" ($reutilizado.Codigo -eq 201) "codigo=$($reutilizado.Codigo) $($reutilizado.Texto)"
@@ -456,7 +461,7 @@ if ($turnoState.Codigo -eq 201) {
 
     $cancelarAtendido = Invocar -Metodo PUT -Ruta "/api/turnos/$idState/cancelar" -Sesion $recepcion
     Probar "ATENDIDO -> cancelar es invalido (409)" ($cancelarAtendido.Codigo -eq 409) "codigo=$($cancelarAtendido.Codigo)"
-    Probar "El 409 trae el formato de error de la API" ($cancelarAtendido.Datos.codigo -eq 409 -and $cancelarAtendido.Datos.error -like "*atendido*") "$($cancelarAtendido.Texto)"
+    Probar "El 409 viene en Problem Details (status y detail)" ($cancelarAtendido.Datos.status -eq 409 -and $cancelarAtendido.Datos.detail -like "*atendido*") "$($cancelarAtendido.Texto)"
 }
 
 # ========================================================= COBERTURA ========
@@ -545,26 +550,22 @@ Probar "Un PACIENTE si puede ver su propio historial" ($historialPropio.Codigo -
 
 # ============================================================== MENSAJERIA ==
 
-if ($LogWildFly -and (Test-Path $LogWildFly)) {
-    Titulo "MENSAJERIA JMS (cola + topico, leida del log de WildFly)"
+Titulo "MENSAJERIA JMS (cola + topico)"
 
-    # El turno de la reserva guiada se confirmo arriba: su id tiene que
-    # aparecer en el log de los tres consumidores (los MDB son asincronicos,
-    # por eso se espera unos segundos).
-    $idJms = $confirmado.Datos.turnoId
-    $cola = $false; $topicoPaciente = $false; $topicoProfesional = $false
-    for ($i = 0; $i -lt 10 -and -not ($cola -and $topicoPaciente -and $topicoProfesional); $i++) {
-        Start-Sleep -Seconds 1
-        $lineas = Get-Content $LogWildFly -Tail 400
-        $delTurno          = $lineas | Select-String -SimpleMatch "Turno ${idJms}:"
-        $cola              = [bool]($delTurno | Select-String -SimpleMatch "[JMS-COLA]")
-        $topicoPaciente    = [bool]($delTurno | Select-String -SimpleMatch "recordatorio para el paciente")
-        $topicoProfesional = [bool]($delTurno | Select-String -SimpleMatch "recordatorio para el profesional")
-    }
-    Probar "La cola entrego la confirmacion del turno $idJms" $cola
-    Probar "El topico entrego el recordatorio al suscriptor del paciente" $topicoPaciente
-    Probar "El topico entrego el recordatorio al suscriptor del profesional" $topicoProfesional
+# El turno de la reserva guiada se confirmo arriba. Los tres consumidores
+# (cola de confirmaciones y los dos suscriptores del topico) registran cada uno
+# su aviso; como son asincronicos, se espera unos segundos.
+$idJms = $confirmado.Datos.turnoId
+$avisos = $null
+for ($i = 0; $i -lt 20; $i++) {
+    $avisos = Invocar -Metodo GET -Ruta "/api/turnos/$idJms/notificaciones" -Sesion $recepcion
+    if ($avisos.Codigo -eq 200 -and @($avisos.Datos).Count -ge 3) { break }
+    Start-Sleep -Seconds 1
 }
+$tipos = @($avisos.Datos | ForEach-Object { $_.tipo })
+Probar "La cola genero la confirmacion del turno $idJms" ($tipos -contains "CONFIRMACION") $avisos.Texto
+Probar "El topico genero el recordatorio para el paciente" ($tipos -contains "RECORDATORIO")
+Probar "El topico genero el aviso para el profesional" ($tipos -contains "AVISO_PROFESIONAL")
 
 # =================================================================== CIERRE ==
 
