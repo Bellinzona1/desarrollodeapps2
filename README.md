@@ -25,6 +25,9 @@ GitHub Actions**, **health check** real y **migraciones Flyway**; **cobertura co
 | **Health check** | <http://localhost:8080/mediconecta/api/salud> |
 | **API (OpenAPI 3.1)** | <http://localhost:8080/mediconecta/api-docs.html> · contrato en [`openapi.json`](src/main/webapp/openapi.json) |
 | **Mejoras tras la corrección** | [docs/Mejoras_Correccion_Entrega_2.md](docs/Mejoras_Correccion_Entrega_2.md) |
+| **Pruebas** | [Plan de pruebas](docs/Plan_de_Pruebas.md) · [Matriz de trazabilidad](docs/Matriz_de_Trazabilidad.md) · [Informe de estado](docs/Informe_de_Estado.md) |
+| **Usuarios finales** | [Manual de usuario](docs/Manual_de_Usuario.md) |
+| **Uso de IA** | [Declaración de uso de IA](docs/Declaracion_Uso_IA.md) |
 | **Documento de la entrega** | [docs/Entrega_Obligatoria_2.md](docs/Entrega_Obligatoria_2.md) (cierre del 13/11 en §9) · [Entrega 1](docs/Entrega_Obligatoria_1.md) |
 | **Arquitectura y patrones** | [docs/arquitectura.md](docs/arquitectura.md) |
 | **Guion de la defensa** | [docs/guion-defensa.md](docs/guion-defensa.md) |
@@ -356,9 +359,15 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | Método | Ruta | Roles | Respuesta |
 |---|---|---|---|
 | GET | `/api/turnos` | RECEPCION, MEDICO, ADMIN | Agenda operativa (sin archivados) ordenada por fecha |
-| GET | `/api/turnos/{id}` | todos | El turno, o `404` (funciona aunque esté archivado). Un PACIENTE solo puede ver los suyos (`400`) |
+| GET | `/api/turnos/{id}` | todos | El turno con su **`ETag`**, o `404` (funciona aunque esté archivado). Un PACIENTE solo puede ver los suyos (`400`). Con `If-None-Match` igual → `304` |
 | POST | `/api/turnos` | PACIENTE, RECEPCION, ADMIN | `201` + `Location`, o `400` con la regla incumplida. Un PACIENTE solo puede reservar para sí mismo. Acepta **`Idempotency-Key`** (ver abajo) |
 | GET | `/api/turnos/{id}/notificaciones` | todos | Avisos que generaron los consumidores JMS (confirmación, recordatorio, aviso al profesional). Un PACIENTE solo los de sus turnos |
+
+Los `PUT .../cancelar`, `.../atender`, `.../archivar` y `PUT /api/pacientes/{documento}`
+aceptan **`If-Match`** con el ETag: si otro usuario modificó el recurso en el medio
+responden `412` (`precondicion-fallida`) y no pisan el cambio. Sin la cabecera funcionan
+como antes. `GET /api/pacientes/{documento}` también devuelve ETag (y un PACIENTE solo
+puede leer su propia ficha).
 | PUT | `/api/turnos/{id}/cancelar` | PACIENTE, RECEPCION, MEDICO, ADMIN | El turno en estado `CANCELADO`. Ownership: un PACIENTE solo cancela los propios, un MEDICO solo los de su agenda (`400` si no corresponde). **`409`** si ya estaba cancelado o atendido |
 | PUT | `/api/turnos/{id}/atender` | **MEDICO, ADMIN** | El turno en estado `ATENDIDO`. Un MEDICO solo sobre su agenda (`400`). **`409`** si no está `PROGRAMADO` |
 | PUT | `/api/turnos/{id}/archivar` | **RECEPCION, ADMIN** | Saca de la agenda un turno ya `CANCELADO` sin borrarlo: sigue en el historial del paciente. **`409`** si no está cancelado o si ya estaba archivado |
@@ -458,7 +467,9 @@ El cliente decide con `type` (estable); `detail` es para personas.
 | `no-encontrado` | 404 | La entidad no existe |
 | `transicion-invalida` | 409 | Transición de estado inválida (patrón State) |
 | `idempotencia-en-curso` · `idempotencia-reutilizada` | 409 · 422 | Ver `Idempotency-Key` |
-| `integracion-externa` · `tiempo-agotado` | 502 · 504 | Un sistema externo falló · no respondió a tiempo |
+| `modificacion-concurrente` · `precondicion-fallida` | 409 · 412 | Dos modificaciones a la vez · `If-Match` con una versión vieja |
+| `demasiadas-solicitudes` | 429 | Fuerza bruta en el login (5 fallos por usuario o 30 por IP en 5 min) o más de 10 consultas por minuto al asistente de IA. Trae `Retry-After` |
+| `integracion-externa` · `tiempo-agotado` | 502 · 504 | Un sistema externo falló · no respondió a tiempo. La cobertura y la IA **no** devuelven estos errores: tienen fallback (`contingencia: true`) |
 | `error-interno` | 500 | Error no previsto: sin detalles internos; el `idError` de la respuesta es el mismo que queda en el log |
 
 Los errores que genera JAX-RS (ruta inexistente `404`, método no permitido `405` con
@@ -554,7 +565,9 @@ src/test/java/                                171 tests unitarios JUnit 5
 ### Tests unitarios, cobertura y linter (sin servidor ni base de datos)
 
 ```powershell
-mvn verify                                                # linter + 171 tests + cobertura minima
+./mvnw verify                                             # igual que mvn verify, con Maven 3.9.9 fijado
+mvn verify                                                # enforcer + linter + 194 tests + cobertura minima
+mvn test-compile org.pitest:pitest-maven:mutationCoverage # mutation testing (PIT, minimo 60 %)
 mvn test                                                  # solo linter + tests (informe en target/site/jacoco/)
 mvn test -Dtest=FachadaReservasTest                       # una clase
 mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
@@ -570,6 +583,24 @@ mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
   simulados, productor JMS) quedan fuera del mínimo y las cubre la prueba de punta a punta.
 - Los EJB se prueban como objetos comunes con los repositorios en memoria; los MDB, con
   mensajes JMS simulados. Hay un test que compara `openapi.json` con los recursos reales.
+- **Capa de negocio:** el build exige además 80 % de líneas y 70 % de ramas en
+  `negocio` (hoy 95,0 % y 82,5 %). **Mutation testing (PIT):** 85 % de mutantes
+  detectados (mínimo 60 %).
+- **Build reproducible:** `./mvnw` usa siempre Maven 3.9.9 y el enforcer exige JDK ≥ 17 y
+  versión fija en todos los plugins.
+
+### Carga, seguridad e IA
+
+| Prueba | Comando | Último resultado (19/11/2026) |
+|---|---|---|
+| Carga (k6, p95 < 500 ms) | `docker run --rm -i --network host -e BASE_URL=... grafana/k6:0.54.0 run - < pruebas/carga/carga.js` | p95 35,6 ms, 0 % errores, ~200 req/s |
+| OWASP ZAP baseline | ver [plan de pruebas](docs/Plan_de_Pruebas.md) §5 | 0 High, 0 Medium, 0 Low |
+| Secretos en el historial | `docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 git /repo` | 0 hallazgos |
+| IA (12 casos) | `pruebas/ia/evaluar-ia.sh http://localhost:8080/mediconecta` | 12/12 |
+
+El [plan de pruebas](docs/Plan_de_Pruebas.md) §6 tiene el guion para demostrar en vivo el
+timeout con fallback, el broker caído sin pérdida de mensajes, la DLQ, `Idempotency-Key` y
+ETag.
 
 ### Prueba de punta a punta (contra la aplicación desplegada)
 
@@ -585,24 +616,30 @@ scripts/smoke-test.sh http://localhost:8180/mediconecta   # otro puerto
 Recorre: health check, cabeceras de seguridad, contrato OpenAPI, login JWT (credenciales
 malas, token adulterado), roles, Problem Details, pacientes, profesionales, turnos (fecha
 pasada, superposición, ownership, 409 del patrón State), `Idempotency-Key`, cobertura
-SOAP/REST, los cuatro pasos del asistente stateful, los avisos de los tres consumidores JMS
-y el pase de un mensaje defectuoso a la DLQ. Devuelve 0 si todas pasan. La versión
-PowerShell cubre un subconjunto (sin cabeceras, idempotencia ni DLQ).
+SOAP/REST, los cuatro pasos del asistente stateful, los avisos de los tres consumidores JMS,
+el pase de un mensaje defectuoso a la DLQ, **seguridad en vivo** (BOLA/IDOR, BFLA, JWT
+`alg:none`/firma ajena/mal formado, inyección SQL y XSS, 429 ante fuerza bruta), **ETag**
+(304 y 412) y el **gateway de IA** (orientación, emergencia, fallback). Devuelve 0 si todas
+pasan. La versión PowerShell cubre un subconjunto.
 
-Última ejecución de `smoke-test.sh` (19/11/2026): **123 pruebas OK, 0 fallidas**, tanto
-sobre WildFly 36.0.1.Final local (`standalone-full.xml`, JDK 17, PostgreSQL 16) como
-sobre `docker compose`.
+Última ejecución de `smoke-test.sh` (19/11/2026): **148 pruebas OK, 0 fallidas** sobre
+WildFly 36.0.1.Final local (`standalone-full.xml`, JDK 17, PostgreSQL 16).
 
 ### Integración continua (GitHub Actions)
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada push y pull request:
 
-1. **calidad**: `mvn verify` (linter + tests + cobertura mínima); publica el informe de
-   cobertura y el WAR como artefactos y una tabla de cobertura por paquete en el resumen.
-2. **migraciones**: aplica `db/migraciones` sobre un PostgreSQL vacío y las vuelve a
+1. **calidad**: `./mvnw verify` (enforcer + linter + tests + cobertura mínima total y de
+   negocio); publica el informe de cobertura, el WAR y una tabla de cobertura por paquete.
+2. **mutacion**: PIT sobre la capa de negocio (falla con menos de 60 %).
+3. **secretos**: gitleaks sobre todo el historial.
+4. **sonar**: análisis y Quality Gate de SonarCloud (necesita el secreto `SONAR_TOKEN`;
+   ver plan de pruebas §5).
+5. **migraciones**: aplica `db/migraciones` sobre un PostgreSQL vacío y las vuelve a
    correr para comprobar que no rompen nada.
-3. **punta-a-punta**: `docker compose up --build`, espera al health check y corre
-   `scripts/smoke-test.sh`. Si falla, vuelca los logs de los contenedores.
+6. **punta-a-punta**: `docker compose up --build`, espera al health check, corre
+   `scripts/smoke-test.sh`, la prueba de carga k6 (p95 < 500 ms) y el escaneo OWASP ZAP
+   (falla con alertas High). Si falla, vuelca los logs de los contenedores.
 
 ---
 

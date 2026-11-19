@@ -102,3 +102,23 @@ Esto no se resuelve con código. Queda como tarea del equipo:
 - Repartir la defensa: que cada integrante presente y responda por un bloque.
 - De acá en adelante, trabajar con ramas y pull requests por integrante, de modo que la
   autoría de los commits refleje quién hizo cada parte.
+
+---
+
+## 7. 3.er checkpoint (20/11): resiliencia
+
+Lo pedido para el checkpoint, además de lo anterior:
+
+| Pedido | Qué se hizo |
+|---|---|
+| Timeout de 5 s con fallback | Cobertura: último resultado bueno (24 h) o "a verificar", con `contingencia: true`. IA: orientación de respaldo por palabras clave (detecta emergencias). Los adaptadores corren fuera de transacción para que el fallback pueda responder. |
+| Si se apaga el broker no se pierden mensajes | Mensajes persistentes y suscripciones durables; probado matando WildFly con mensajes en la cola (plan de pruebas §6). |
+| ETag | `ETag` en turnos y pacientes (`@Version`), `If-None-Match` → 304, `If-Match` → 412. |
+| IA a través de su gateway | `GestorOrientacion`: validación, límite de 10/min (429), filtro de la salida y fallback. |
+| Plan de pruebas, matriz de trazabilidad y manual de usuario | [Plan_de_Pruebas.md](Plan_de_Pruebas.md), [Matriz_de_Trazabilidad.md](Matriz_de_Trazabilidad.md), [Manual_de_Usuario.md](Manual_de_Usuario.md). |
+
+Y adelantado para la entrega final: 429 ante fuerza bruta, corrección de un segundo BOLA
+(fichas de pacientes), PIT (85 %), k6 (p95 35,6 ms), ZAP en CI (0 High), gitleaks en CI,
+job de SonarCloud, Maven Wrapper + enforcer, evaluación de IA y
+[Informe_de_Estado.md](Informe_de_Estado.md).
+
