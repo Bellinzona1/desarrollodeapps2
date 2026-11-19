@@ -128,7 +128,7 @@ if (-not $SoloDatasource) {
 
     Paso "Configurando reintentos/DLQ de JMS y timeouts del servidor"
 
-    foreach ($archivo in @("configurar-mensajeria.cli", "configurar-limites.cli")) {
+    foreach ($archivo in @("configurar-mensajeria.cli", "configurar-limites.cli", "configurar-endurecimiento.cli")) {
         & $cli --connect "--file=$(Join-Path $PSScriptRoot $archivo)"
         if ($LASTEXITCODE -ne 0) { throw "Fallo $archivo. Verifica que WildFly este levantado con standalone-full.xml." }
     }

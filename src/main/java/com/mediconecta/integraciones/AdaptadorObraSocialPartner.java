@@ -5,6 +5,8 @@ import com.mediconecta.negocio.IntegracionExternaException;
 
 import jakarta.ejb.LocalBean;
 import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
 import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -27,7 +29,11 @@ import java.util.concurrent.TimeUnit;
 // @LocalBean: un EJB que implementa una interfaz solo expone esa interfaz;
 // GestorCobertura inyecta cada adaptador por su clase concreta para elegir cual usar.
 @LocalBean
+// NOT_SUPPORTED: una llamada remota no tiene que retener una transaccion, y asi
+// una falla del sistema externo no marca para rollback la del llamador (que
+// necesita seguir viva para responder con el fallback).
 @Stateless
+@TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class AdaptadorObraSocialPartner implements ValidadorCobertura {
 
     private static final String URL_BASE_POR_DEFECTO =

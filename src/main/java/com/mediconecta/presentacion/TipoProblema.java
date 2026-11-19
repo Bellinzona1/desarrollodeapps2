@@ -20,6 +20,9 @@ public enum TipoProblema {
     TRANSICION_INVALIDA(409, "transicion-invalida", "Transicion de estado invalida"),
     IDEMPOTENCIA_EN_CURSO(409, "idempotencia-en-curso", "Pedido repetido en curso"),
     IDEMPOTENCIA_REUTILIZADA(422, "idempotencia-reutilizada", "Idempotency-Key reutilizada con otro pedido"),
+    MODIFICACION_CONCURRENTE(409, "modificacion-concurrente", "El recurso fue modificado al mismo tiempo"),
+    PRECONDICION_FALLIDA(412, "precondicion-fallida", "La version del recurso cambio"),
+    DEMASIADAS_SOLICITUDES(429, "demasiadas-solicitudes", "Demasiadas solicitudes"),
     ERROR_INTERNO(500, "error-interno", "Error interno"),
     INTEGRACION_EXTERNA(502, "integracion-externa", "Fallo de un sistema externo"),
     TIEMPO_AGOTADO(504, "tiempo-agotado", "Un sistema externo no respondio a tiempo");

@@ -165,4 +165,25 @@ class GestionTurnosTest {
         comoUsuario("medico", Roles.MEDICO);
         assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
     }
+
+    @Test
+    void conIfMatchDeUnaVersionViejaNoSeModificaElTurno() {
+        Turno turno = agendarManana();
+
+        assertThrows(VersionDesactualizadaException.class,
+                () -> gestion.cancelarTurno(turno.getId(), turno.getVersion() + 1));
+        assertEquals(EstadoTurno.PROGRAMADO, gestion.obtenerTurno(turno.getId()).getEstado());
+
+        assertEquals(EstadoTurno.CANCELADO, gestion.cancelarTurno(turno.getId(), turno.getVersion()).getEstado());
+        assertThrows(VersionDesactualizadaException.class, () -> gestion.archivarTurno(turno.getId(), 99L));
+        assertTrue(gestion.archivarTurno(turno.getId(), null).isArchivado());
+    }
+
+    @Test
+    void atenderTambienRespetaLaVersion() {
+        Turno turno = agendarManana();
+        comoUsuario("medico", Roles.MEDICO);
+        assertThrows(VersionDesactualizadaException.class, () -> gestion.atenderTurno(turno.getId(), 42L));
+        assertEquals(EstadoTurno.ATENDIDO, gestion.atenderTurno(turno.getId(), turno.getVersion()).getEstado());
+    }
 }

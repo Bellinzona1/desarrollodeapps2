@@ -71,6 +71,7 @@ invocar() {
     fi
     for extra in "$@"; do args+=(-H "$extra"); done
     [ -n "$cuerpo" ] && args+=(--data-binary "$cuerpo")
+    : > "$TMP/cuerpo"
     CODIGO="$(curl "${args[@]}" "$BASE_URL$ruta" || echo 000)"
     TEXTO="$(cat "$TMP/cuerpo" 2> /dev/null)"
 }
@@ -513,6 +514,91 @@ probar "Despues de los reintentos el mensaje llega a la DLQ y queda registrado" 
 probar "Se registra de que destino vino" "$FALLIDO" '[[ "$(jq -r .destinoOriginal <<< "$FALLIDO")" == *ColaConfirmaciones* ]]'
 invocar GET /api/mensajeria/mensajes-fallidos "" recepcion
 probar "Solo un ADMIN ve los mensajes fallidos (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
+
+# ============================================== SEGURIDAD EN VIVO (OWASP API) ==
+
+titulo "SEGURIDAD EN VIVO: JWT, BOLA, BFLA, INYECCIONES Y FUERZA BRUTA"
+
+b64url() { printf '%s' "$1" | base64 | tr -d '=\n' | tr '/+' '_-'; }
+EXP_FUTURO=$(( $(date +%s) + 3600 ))
+TOKEN_algnone="$(b64url '{"alg":"none","typ":"JWT"}').$(b64url "{\"iss\":\"mediconecta\",\"sub\":\"admin\",\"groups\":[\"ADMIN\"],\"exp\":$EXP_FUTURO}")."
+: > "$TMP/jar_algnone"
+invocar GET /api/turnos "" algnone
+probar "Un JWT con alg=none (sin firma) se rechaza con 401" "codigo=$CODIGO" '[ "$CODIGO" = 401 ]'
+TOKEN_ajeno="$(b64url '{"alg":"HS256","typ":"JWT"}').$(b64url "{\"iss\":\"mediconecta\",\"sub\":\"admin\",\"groups\":[\"ADMIN\"],\"exp\":$EXP_FUTURO}").$(b64url firma-inventada)"
+: > "$TMP/jar_ajeno"
+invocar GET /api/turnos "" ajeno
+probar "Un JWT firmado con otro secreto se rechaza con 401" "codigo=$CODIGO" '[ "$CODIGO" = 401 ]'
+TOKEN_basura="no.es.un-jwt"
+: > "$TMP/jar_basura"
+invocar GET /api/turnos "" basura
+probar "Un JWT mal formado se rechaza con 401" "codigo=$CODIGO" '[ "$CODIGO" = 401 ]'
+
+invocar GET /api/pacientes/28999888 "" paciente
+probar "BOLA: un PACIENTE no puede leer la ficha de otro (400)" "codigo=$CODIGO" '[ "$CODIGO" = 400 ]'
+invocar GET /api/pacientes/30111222 "" paciente
+probar "Un PACIENTE si puede leer su propia ficha" "codigo=$CODIGO" '[ "$CODIGO" = 200 ]'
+invocar GET /api/turnos "" paciente
+probar "BFLA: un PACIENTE no puede listar la agenda (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
+invocar POST /api/profesionales "$NUEVO_PROFESIONAL" medico
+probar "BFLA: un MEDICO no puede dar de alta profesionales (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
+invocar GET /api/mensajeria/mensajes-fallidos "" medico
+probar "BFLA: un MEDICO no puede ver la DLQ (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
+
+invocar GET "/api/pacientes?q=%27%20OR%20%271%27%3D%271" "" recepcion
+probar "Inyeccion SQL en la busqueda no devuelve todo el padron" "codigo=$CODIGO $TEXTO" '[ "$CODIGO" = 200 ] && [ "$(jq length <<< "$TEXTO")" = 0 ]'
+invocar GET "/api/pacientes/1%27%20OR%20%271%27%3D%271" "" recepcion
+probar "Inyeccion SQL en el documento da 404, no un paciente" "codigo=$CODIGO" '[ "$CODIGO" = 404 ]'
+invocar POST /api/auth/login '{"usuario":"admin'"'"' OR '"'"'1'"'"'='"'"'1","clave":"x'"'"' OR '"'"'1'"'"'='"'"'1"}'
+probar "Inyeccion SQL en el login devuelve 401" "codigo=$CODIGO" '[ "$CODIGO" = 401 ]'
+invocar POST /api/pacientes "$(jq -nc --arg d "$(aleatorio 60000000 69999999)" '{nombre:"<script>alert(1)</script>", documento:$d}')" recepcion
+probar "Un intento de XSS se guarda como texto y se devuelve como JSON" "$(cabecera Content-Type)" \
+    '[ "$CODIGO" = 201 ] && [[ "$(cabecera Content-Type)" == application/json* ]]'
+
+VICTIMA="fuerza-bruta-$RANDOM$RANDOM"
+for i in 1 2 3 4 5; do
+    invocar POST /api/auth/login "$(jq -nc --arg u "$VICTIMA" '{usuario:$u, clave:"mala"}')"
+done
+probar "Los primeros 5 intentos fallidos devuelven 401" "codigo=$CODIGO" '[ "$CODIGO" = 401 ]'
+invocar POST /api/auth/login "$(jq -nc --arg u "$VICTIMA" '{usuario:$u, clave:"mala"}')"
+probar "Fuerza bruta: el sexto intento devuelve 429" "codigo=$CODIGO $TEXTO" \
+    '[ "$CODIGO" = 429 ] && [ "$(dato .type)" = urn:mediconecta:problema:demasiadas-solicitudes ]'
+probar "El 429 trae Retry-After" "" '[ -n "$(cabecera Retry-After)" ]'
+
+# ======================================================== ETAG / IF-MATCH ===
+
+titulo "ETAG Y CONCURRENCIA OPTIMISTA"
+
+invocar POST /api/turnos "$(jq -nc --arg d "$DOCUMENTO" --argjson p "$PROFESIONAL_ID" --arg f "$(primer_horario "$PROFESIONAL_ID")" '{documentoPaciente:$d, profesionalId:$p, fechaHora:$f}')" recepcion
+ID_ETAG="$(dato .id)"
+invocar GET "/api/turnos/$ID_ETAG" "" recepcion
+ETAG="$(cabecera ETag)"
+probar "GET /api/turnos/{id} devuelve ETag" "$ETAG" '[[ "$ETAG" == *"turno-$ID_ETAG-v"* ]]'
+invocar GET "/api/turnos/$ID_ETAG" "" recepcion "If-None-Match: $ETAG"
+probar "Con If-None-Match igual responde 304 sin cuerpo" "codigo=$CODIGO" '[ "$CODIGO" = 304 ] && [ -z "$TEXTO" ]'
+invocar PUT "/api/turnos/$ID_ETAG/cancelar" "" recepcion "If-Match: \"turno-$ID_ETAG-v999\""
+probar "Con If-Match de una version vieja responde 412" "codigo=$CODIGO $TEXTO" \
+    '[ "$CODIGO" = 412 ] && [ "$(dato .type)" = urn:mediconecta:problema:precondicion-fallida ]'
+invocar PUT "/api/turnos/$ID_ETAG/cancelar" "" recepcion "If-Match: $ETAG"
+probar "Con If-Match correcto cancela y devuelve el ETag nuevo" "codigo=$CODIGO $(cabecera ETag)" \
+    '[ "$CODIGO" = 200 ] && [ -n "$(cabecera ETag)" ] && [ "$(cabecera ETag)" != "$ETAG" ]'
+invocar GET /api/pacientes/30111222 "" recepcion
+probar "GET /api/pacientes/{documento} devuelve ETag" "" '[[ "$(cabecera ETag)" == *paciente-30111222-v* ]]'
+
+# ================================================ IA: GATEWAY Y FALLBACK =====
+
+titulo "ASISTENTE DE IA (gateway con timeout de 5 s y fallback)"
+
+invocar POST /api/reserva/orientacion '{"mensajes":[{"rol":"usuario","texto":"Me cai jugando al futbol y me duele mucho la rodilla"}]}' paciente
+probar "El gateway de IA responde (modelo o respaldo)" "codigo=$CODIGO $TEXTO" '[ "$CODIGO" = 200 ] && [ -n "$(dato .mensaje)" ]'
+probar "Sugiere Traumatologia para un golpe en la rodilla" "$TEXTO" '[ "$(dato .especialidad)" = Traumatologia ]'
+printf '         (respuesta %s)\n' "$( [ "$(dato .contingencia)" = true ] && echo 'del respaldo por palabras clave' || echo 'del modelo de IA')"
+invocar POST /api/reserva/orientacion '{"mensajes":[{"rol":"usuario","texto":"Tengo un dolor fuerte en el pecho y falta de aire"}]}' paciente
+probar "Ante una emergencia marca urgente y deriva al 107/911" "$TEXTO" '[ "$(dato .urgente)" = true ]'
+invocar POST /api/reserva/orientacion '{"mensajes":[]}' paciente
+probar "Una conversacion vacia se rechaza con 400" "codigo=$CODIGO" '[ "$CODIGO" = 400 ]'
+invocar GET /api/pacientes/30111222/cobertura "" recepcion
+probar "La cobertura informa si es de contingencia" "$TEXTO" '[ "$(dato '"'"'.contingencia | tostring'"'"')" = false ]'
 
 # =================================================================== CIERRE ==
 

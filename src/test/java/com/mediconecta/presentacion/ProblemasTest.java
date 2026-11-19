@@ -137,4 +137,16 @@ class ProblemasTest {
             assertTrue(tipo.estado() >= 400 && tipo.estado() < 600, tipo.name());
         }
     }
+
+    @Test
+    void losNuevosTiposDeResilienciaTienenSuCodigo() {
+        assertEquals(412, de(new com.mediconecta.negocio.VersionDesactualizadaException("cambio")).estado());
+        DetalleProblema muchos = de(new com.mediconecta.negocio.DemasiadasSolicitudesException("espere",
+                java.time.Duration.ofSeconds(30)));
+        assertEquals(429, muchos.estado());
+        assertEquals(TipoProblema.DEMASIADAS_SOLICITUDES.uri(), muchos.tipo());
+        DetalleProblema concurrente = de(new RuntimeException(new jakarta.persistence.OptimisticLockException("x")));
+        assertEquals(409, concurrente.estado());
+        assertEquals(TipoProblema.MODIFICACION_CONCURRENTE.uri(), concurrente.tipo());
+    }
 }

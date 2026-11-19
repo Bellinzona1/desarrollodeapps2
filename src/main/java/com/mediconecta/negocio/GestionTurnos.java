@@ -144,7 +144,19 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public Turno cancelarTurno(Long id) {
+        return cancelarTurno(id, null);
+    }
+
+    /**
+     * Igual que {@link #cancelarTurno(Long)}, con control de concurrencia
+     * optimista: si {@code versionEsperada} no es la version actual (otro
+     * usuario lo modifico despues de que el cliente lo leyo), no se toca y se
+     * responde 412. La version llega en el ETag ({@code If-Match}).
+     */
+    @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
+    public Turno cancelarTurno(Long id, Long versionEsperada) {
         Turno turno = buscar(id);
+        VersionDesactualizadaException.exigir(turno.getVersion(), versionEsperada, "turno");
 
         exigirPuedeCancelar(turno);
 
@@ -163,7 +175,14 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.MEDICO, Roles.ADMIN})
     public Turno atenderTurno(Long id) {
+        return atenderTurno(id, null);
+    }
+
+    /** {@link #atenderTurno(Long)} con control de concurrencia optimista (If-Match). */
+    @RolesAllowed({Roles.MEDICO, Roles.ADMIN})
+    public Turno atenderTurno(Long id, Long versionEsperada) {
         Turno turno = buscar(id);
+        VersionDesactualizadaException.exigir(turno.getVersion(), versionEsperada, "turno");
 
         if (esSoloMedico()) {
             String usuario = contexto.getCallerPrincipal().getName();
@@ -216,7 +235,14 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.RECEPCION, Roles.ADMIN})
     public Turno archivarTurno(Long id) {
+        return archivarTurno(id, null);
+    }
+
+    /** {@link #archivarTurno(Long)} con control de concurrencia optimista (If-Match). */
+    @RolesAllowed({Roles.RECEPCION, Roles.ADMIN})
+    public Turno archivarTurno(Long id, Long versionEsperada) {
         Turno turno = buscar(id);
+        VersionDesactualizadaException.exigir(turno.getVersion(), versionEsperada, "turno");
 
         // Solo TurnoCancelado acepta archivar, y una unica vez (409 si no).
         turno.archivar();

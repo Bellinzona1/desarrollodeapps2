@@ -5,10 +5,12 @@ import com.mediconecta.negocio.ServicioAutenticacion;
 import com.mediconecta.seguridad.ServicioJwt;
 
 import jakarta.inject.Inject;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.MediaType;
 
 import java.util.ArrayList;
@@ -40,12 +42,17 @@ public class RecursoAutenticacion {
     @Inject
     private ServicioJwt servicioJwt;
 
+    /** Para la IP de origen: el limite de intentos fallidos tambien cuenta por IP. */
+    @Context
+    private HttpServletRequest peticion;
+
     @POST
     @Path("/login")
     public RespuestaLogin login(PedidoLogin pedido) {
         Usuario usuario = servicioAutenticacion.autenticar(
                 pedido == null ? null : pedido.getUsuario(),
-                pedido == null ? null : pedido.getClave());
+                pedido == null ? null : pedido.getClave(),
+                peticion == null ? null : peticion.getRemoteAddr());
 
         List<String> roles = new ArrayList<>(usuario.getRoles());
 

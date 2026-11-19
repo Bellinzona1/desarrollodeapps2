@@ -17,7 +17,10 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.EntityTag;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Request;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
@@ -52,15 +55,36 @@ public class RecursoTurnos {
     @Context
     private UriInfo uriInfo;
 
+    @Context
+    private Request request;
+
     @GET
     public List<Turno> listar() {
         return gestionTurnos.listarTurnos();
     }
 
+    /**
+     * Un turno, con su ETag. Con {@code If-None-Match} igual al ETag actual
+     * responde {@code 304} sin cuerpo (GET condicional).
+     */
     @GET
     @Path("/{id}")
-    public Turno obtener(@PathParam("id") Long id) {
-        return gestionTurnos.obtenerTurno(id);
+    public Response obtener(@PathParam("id") Long id) {
+        Turno turno = gestionTurnos.obtenerTurno(id);
+        EntityTag etiqueta = etiqueta(turno);
+        Response.ResponseBuilder noCambio = request.evaluatePreconditions(etiqueta);
+        if (noCambio != null) {
+            return noCambio.tag(etiqueta).build();
+        }
+        return Response.ok(turno).tag(etiqueta).build();
+    }
+
+    private static EntityTag etiqueta(Turno turno) {
+        return Etiquetas.de("turno", turno.getId(), turno.getVersion());
+    }
+
+    private static Long version(String siCoincide, Long id) {
+        return Etiquetas.versionEsperada(siCoincide, "turno", id);
     }
 
     /**
@@ -94,23 +118,27 @@ public class RecursoTurnos {
         return gestionNotificaciones.notificacionesDeTurno(id);
     }
 
+    /** Con {@code If-Match} (opcional) solo cancela si el turno sigue en esa version; si no, 412. */
     @PUT
     @Path("/{id}/cancelar")
-    public Turno cancelar(@PathParam("id") Long id) {
-        return gestionTurnos.cancelarTurno(id);
+    public Response cancelar(@PathParam("id") Long id, @HeaderParam(HttpHeaders.IF_MATCH) String siCoincide) {
+        Turno turno = gestionTurnos.cancelarTurno(id, version(siCoincide, id));
+        return Response.ok(turno).tag(etiqueta(turno)).build();
     }
 
     /** Registra la atencion: PROGRAMADO -> ATENDIDO (409 desde otro estado). */
     @PUT
     @Path("/{id}/atender")
-    public Turno atender(@PathParam("id") Long id) {
-        return gestionTurnos.atenderTurno(id);
+    public Response atender(@PathParam("id") Long id, @HeaderParam(HttpHeaders.IF_MATCH) String siCoincide) {
+        Turno turno = gestionTurnos.atenderTurno(id, version(siCoincide, id));
+        return Response.ok(turno).tag(etiqueta(turno)).build();
     }
 
     /** Saca un turno cancelado de la agenda operativa sin borrarlo. */
     @PUT
     @Path("/{id}/archivar")
-    public Turno archivar(@PathParam("id") Long id) {
-        return gestionTurnos.archivarTurno(id);
+    public Response archivar(@PathParam("id") Long id, @HeaderParam(HttpHeaders.IF_MATCH) String siCoincide) {
+        Turno turno = gestionTurnos.archivarTurno(id, version(siCoincide, id));
+        return Response.ok(turno).tag(etiqueta(turno)).build();
     }
 }

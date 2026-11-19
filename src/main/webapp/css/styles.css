@@ -1,3 +1,30 @@
+/* Tipografia Inter (licencia SIL OFL) servida desde la propia aplicacion:
+   sin depender de Google Fonts, la Content-Security-Policy no necesita
+   ningun origen externo. */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+
 /* ==========================================================================
    MediConecta - hoja de estilos unica
    Design system tomado del prototipo de Figma.

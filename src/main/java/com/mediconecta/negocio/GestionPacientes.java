@@ -59,6 +59,19 @@ public class GestionPacientes {
      * flujo de reserva: si alguien pide un turno con un documento que todavia no
      * esta en el padron, {@link FachadaReservas} lo da de alta en el momento.</p>
      */
+    /**
+     * La ficha de un paciente para mostrarla. A diferencia de
+     * {@link #buscarPorDocumento} (que usan los otros componentes), un PACIENTE
+     * solo puede consultar la propia: sin este control podria leer la ficha de
+     * cualquiera cambiando el documento de la URL (BOLA / IDOR).
+     */
+    @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
+    public Paciente consultarFicha(String documento) {
+        Paciente paciente = buscarPorDocumento(documento);
+        exigirPropioDocumentoSiEsPaciente(paciente.getDocumento());
+        return paciente;
+    }
+
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.ADMIN})
     public Paciente registrarPaciente(Paciente paciente) {
         if (paciente == null) {
@@ -91,7 +104,14 @@ public class GestionPacientes {
      */
     @RolesAllowed({Roles.RECEPCION, Roles.ADMIN})
     public Paciente actualizarDatos(String documento, Paciente datos) {
+        return actualizarDatos(documento, datos, null);
+    }
+
+    /** {@link #actualizarDatos(String, Paciente)} con control de concurrencia optimista (If-Match). */
+    @RolesAllowed({Roles.RECEPCION, Roles.ADMIN})
+    public Paciente actualizarDatos(String documento, Paciente datos, Long versionEsperada) {
         Paciente existente = buscarPorDocumento(documento);
+        VersionDesactualizadaException.exigir(existente.getVersion(), versionEsperada, "paciente");
 
         if (datos == null) {
             throw new ReglaNegocioException("Debe enviar los datos del paciente.");

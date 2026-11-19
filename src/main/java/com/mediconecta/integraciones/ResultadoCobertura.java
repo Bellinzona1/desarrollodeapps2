@@ -15,6 +15,11 @@ public class ResultadoCobertura {
     /** De donde vino el dato: {@code LEGADO}, {@code PARTNER} o {@code NINGUNA}. */
     private String origen;
 
+    /** {@code true} si el sistema externo no respondio y el resultado es de respaldo. */
+    private boolean contingencia;
+
+    private String mensaje;
+
     public ResultadoCobertura() {
     }
 
@@ -55,5 +60,21 @@ public class ResultadoCobertura {
 
     public void setOrigen(String origen) {
         this.origen = origen;
+    }
+
+    public boolean isContingencia() {
+        return contingencia;
+    }
+
+    public void setContingencia(boolean contingencia) {
+        this.contingencia = contingencia;
+    }
+
+    public String getMensaje() {
+        return mensaje;
+    }
+
+    public void setMensaje(String mensaje) {
+        this.mensaje = mensaje;
     }
 }

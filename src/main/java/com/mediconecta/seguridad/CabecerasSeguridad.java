@@ -28,8 +28,9 @@ import java.io.IOException;
  *       documentos de pacientes) no se filtran a otros sitios.</li>
  *   <li>{@code Permissions-Policy}: la aplicacion no usa camara, microfono ni
  *       ubicacion; se apagan para que ningun script los pueda pedir.</li>
- *   <li>{@code Cross-Origin-Opener-Policy} y {@code Cross-Origin-Resource-Policy}:
- *       aislan la pagina y sus recursos de otros origenes.</li>
+ *   <li>{@code Cross-Origin-Opener-Policy}, {@code Cross-Origin-Resource-Policy}
+ *       y {@code Cross-Origin-Embedder-Policy}: aislan la pagina y sus recursos
+ *       de otros origenes.</li>
  *   <li>{@code Strict-Transport-Security}: solo cuando la peticion llego por
  *       HTTPS (directo o detras de un proxy que lo informa), porque mandarlo por
  *       HTTP no tiene efecto.</li>
@@ -46,12 +47,12 @@ public class CabecerasSeguridad extends HttpFilter {
 
     private static final long serialVersionUID = 1L;
 
-    /** Politica para las pantallas: todo del propio sitio, salvo la tipografia de Google Fonts. */
+    /** Politica para las pantallas: todo del propio sitio (la tipografia tambien se sirve desde aca). */
     static final String CSP_PANTALLAS = String.join("; ",
             "default-src 'self'",
             "script-src 'self'",
-            "style-src 'self' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com",
+            "style-src 'self'",
+            "font-src 'self'",
             "img-src 'self' data:",
             "connect-src 'self'",
             "object-src 'none'",
@@ -102,8 +103,10 @@ public class CabecerasSeguridad extends HttpFilter {
             respuesta.setHeader("Cache-Control", "no-store");
         } else if (ruta.startsWith("/api-docs")) {
             respuesta.setHeader("Content-Security-Policy", CSP_DOCUMENTACION);
+            respuesta.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
         } else {
             respuesta.setHeader("Content-Security-Policy", CSP_PANTALLAS);
+            respuesta.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
         }
 
         if (llegoPorHttps(peticion)) {

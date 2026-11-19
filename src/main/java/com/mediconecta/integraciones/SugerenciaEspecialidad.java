@@ -16,6 +16,9 @@ public class SugerenciaEspecialidad {
 
     private boolean urgente;
 
+    /** {@code true} si la sugerencia la dio la orientacion de respaldo y no el modelo de IA. */
+    private boolean contingencia;
+
     public SugerenciaEspecialidad() {
     }
 
@@ -47,5 +50,13 @@ public class SugerenciaEspecialidad {
 
     public void setUrgente(boolean urgente) {
         this.urgente = urgente;
+    }
+
+    public boolean isContingencia() {
+        return contingencia;
+    }
+
+    public void setContingencia(boolean contingencia) {
+        this.contingencia = contingencia;
     }
 }

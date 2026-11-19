@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API de MediConecta",
-    "version": "3.0.0",
-    "description": "Gestion de turnos medicos (TP integrador, Desarrollo de Aplicaciones II - UADE).\n\n* **Autenticacion:** `POST /auth/login` devuelve un JWT; el resto de las operaciones lo esperan en `Authorization: Bearer <token>`.\n* **Autorizacion:** por rol, en la capa de negocio (`@RolesAllowed`). Cada operacion indica sus roles (tambien en `x-roles`).\n* **Errores:** siempre `application/problem+json` (RFC 9457).\n* **Idempotencia:** `POST /turnos` acepta `Idempotency-Key`.\n\nEste documento lo valida un test unitario (ContratoOpenApiTest): si se agrega un endpoint sin documentarlo, el build falla."
+    "version": "3.1.0",
+    "description": "Gestion de turnos medicos (TP integrador, Desarrollo de Aplicaciones II - UADE).\n\n* **Autenticacion:** `POST /auth/login` devuelve un JWT; el resto de las operaciones lo esperan en `Authorization: Bearer <token>`.\n* **Autorizacion:** por rol, en la capa de negocio (`@RolesAllowed`). Cada operacion indica sus roles (tambien en `x-roles`).\n* **Errores:** siempre `application/problem+json` (RFC 9457).\n* **Idempotencia:** `POST /turnos` acepta `Idempotency-Key`.\n* **Concurrencia optimista:** turnos y pacientes devuelven `ETag`; `If-None-Match` da `304` y `If-Match` con una version vieja da `412`.\n* **Limites:** `429` con `Retry-After` ante fuerza bruta en el login y en el gateway de IA.\n\nEste documento lo valida un test unitario (ContratoOpenApiTest): si se agrega un endpoint sin documentarlo, el build falla."
   },
   "servers": [
     {
@@ -48,7 +48,7 @@
         "summary": "Iniciar sesion (emite un JWT)",
         "operationId": "login",
         "security": [],
-        "description": "Valida usuario y contrasena contra la tabla usuarios (hash PBKDF2) y devuelve un JWT HS256.\n\n**Publico**: no requiere token.",
+        "description": "Valida usuario y contrasena contra la tabla usuarios (hash PBKDF2) y devuelve un JWT HS256. **Fuerza bruta:** tras 5 intentos fallidos para un usuario (o 30 desde una IP) en 5 minutos responde `429` con `Retry-After`.\n\n**Publico**: no requiere token.",
         "requestBody": {
           "required": true,
           "content": {
@@ -75,6 +75,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Problema401"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problema429"
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
@@ -308,20 +311,36 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "Un PACIENTE solo puede ver su propia ficha.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "Un PACIENTE solo puede ver su propia ficha (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Documento"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "La ficha, con su ETag",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paciente"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "304": {
+            "description": "No cambio desde el ETag de If-None-Match (sin cuerpo)",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -352,10 +371,13 @@
           "RECEPCION",
           "ADMIN"
         ],
-        "description": "**Roles:** RECEPCION, ADMIN.",
+        "description": "Con `If-Match` (opcional) solo se aplica si la ficha sigue en esa version; si no, `412`.\n\n**Roles:** RECEPCION, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Documento"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "requestBody": {
@@ -370,12 +392,17 @@
         },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "La ficha con su ETag nuevo",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Paciente"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -390,6 +417,12 @@
           },
           "404": {
             "$ref": "#/components/responses/Problema404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problema409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problema412"
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
@@ -410,7 +443,7 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "PAMI, OSDE e IOMA se validan contra el sistema legado por SOAP; el resto contra el partner por REST (patron Adapter). `502` si el sistema externo falla, `504` si no responde a tiempo.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "PAMI, OSDE e IOMA se validan contra el sistema legado por SOAP; el resto contra el partner por REST (patron Adapter). **Timeout de 5 s con fallback:** si el sistema externo falla o no responde a tiempo se responde igual `200` con `contingencia: true`: el ultimo resultado verificado de las ultimas 24 h (`origen: CACHE`) o uno a verificar en la atencion (`origen: CONTINGENCIA`).\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Documento"
@@ -441,12 +474,6 @@
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
-          },
-          "502": {
-            "$ref": "#/components/responses/Problema502"
-          },
-          "504": {
-            "$ref": "#/components/responses/Problema504"
           }
         }
       }
@@ -1164,14 +1191,14 @@
         "tags": [
           "Reserva guiada (@Stateful)"
         ],
-        "summary": "Paso 1 con IA: sugerir especialidad",
+        "summary": "Paso 1 con IA: sugerir especialidad (gateway de IA)",
         "operationId": "orientarEspecialidad",
         "x-roles": [
           "PACIENTE",
           "RECEPCION",
           "ADMIN"
         ],
-        "description": "La conversacion la manda el cliente (el servidor no la guarda). Solo se sugieren especialidades con profesionales activos.\n\n**Roles:** PACIENTE, RECEPCION, ADMIN.",
+        "description": "La conversacion la manda el cliente (el servidor no la guarda). Solo se sugieren especialidades con profesionales activos. **Gateway:** maximo 10 consultas por minuto por usuario (`429` con `Retry-After`); si el modelo falla o no responde en 5 s se usa la orientacion de respaldo por palabras clave (`contingencia: true`), que tambien detecta emergencias.\n\n**Roles:** PACIENTE, RECEPCION, ADMIN.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1202,14 +1229,11 @@
           "403": {
             "$ref": "#/components/responses/Problema403"
           },
+          "429": {
+            "$ref": "#/components/responses/Problema429"
+          },
           "500": {
             "$ref": "#/components/responses/Problema500"
-          },
-          "502": {
-            "$ref": "#/components/responses/Problema502"
-          },
-          "504": {
-            "$ref": "#/components/responses/Problema504"
           }
         }
       }
@@ -1607,20 +1631,36 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "Un PACIENTE solo puede consultar los suyos (`400`).\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "Un PACIENTE solo puede consultar los suyos (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdTurno"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "El turno, con su ETag",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Turno"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            }
+          },
+          "304": {
+            "description": "No cambio desde el ETag de If-None-Match (sin cuerpo)",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -1653,20 +1693,28 @@
           "RECEPCION",
           "ADMIN"
         ],
-        "description": "Saca de la agenda un turno CANCELADO sin borrarlo. `409` si la transicion no es valida (patron State).\n\n**Roles:** RECEPCION, ADMIN.",
+        "description": "Saca de la agenda un turno CANCELADO sin borrarlo. `409` si la transicion no es valida (patron State). Con `If-Match` (opcional) solo se aplica si el turno sigue en esa version; si no, `412`.\n\n**Roles:** RECEPCION, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdTurno"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "El turno con su ETag nuevo",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Turno"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -1684,6 +1732,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Problema409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problema412"
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
@@ -1702,20 +1753,28 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "PROGRAMADO -> ATENDIDO. Un MEDICO solo sobre su agenda. `409` si la transicion no es valida (patron State).\n\n**Roles:** MEDICO, ADMIN.",
+        "description": "PROGRAMADO -> ATENDIDO. Un MEDICO solo sobre su agenda. `409` si la transicion no es valida (patron State). Con `If-Match` (opcional) solo se aplica si el turno sigue en esa version; si no, `412`.\n\n**Roles:** MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdTurno"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "El turno con su ETag nuevo",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Turno"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -1733,6 +1792,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Problema409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problema412"
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
@@ -1753,20 +1815,28 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "PROGRAMADO -> CANCELADO. Un PACIENTE solo cancela los propios; un MEDICO solo los de su agenda. `409` si la transicion no es valida (patron State).\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "PROGRAMADO -> CANCELADO. Un PACIENTE solo cancela los propios; un MEDICO solo los de su agenda. `409` si la transicion no es valida (patron State). Con `If-Match` (opcional) solo se aplica si el turno sigue en esa version; si no, `412`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdTurno"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "El turno con su ETag nuevo",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Turno"
                 }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
               }
             }
           },
@@ -1784,6 +1854,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Problema409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Problema412"
           },
           "500": {
             "$ref": "#/components/responses/Problema500"
@@ -1879,6 +1952,26 @@
           "example": "30111222"
         }
       },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
+        "description": "ETag de la version que el cliente conoce; si cambio, 412",
+        "schema": {
+          "type": "string",
+          "example": "\"turno-42-v3\""
+        }
+      },
+      "IfNoneMatch": {
+        "name": "If-None-Match",
+        "in": "header",
+        "required": false,
+        "description": "ETag de la version en cache; si no cambio, 304",
+        "schema": {
+          "type": "string",
+          "example": "\"turno-42-v3\""
+        }
+      },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
@@ -1890,6 +1983,14 @@
           "maxLength": 100,
           "pattern": "^[A-Za-z0-9._:-]{8,100}$",
           "example": "5f0c7d2e-8b1a-4f3e-9c4d-2a6b7e8f9a01"
+        }
+      }
+    },
+    "headers": {
+      "ETag": {
+        "description": "Version del recurso (\"<recurso>-<id>-v<version>\")",
+        "schema": {
+          "type": "string"
         }
       }
     },
@@ -1935,7 +2036,17 @@
         }
       },
       "Problema409": {
-        "description": "Conflicto con el estado actual (transicion invalida o pedido repetido en curso)",
+        "description": "Conflicto con el estado actual (transicion invalida, pedido repetido en curso o modificacion concurrente)",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problema"
+            }
+          }
+        }
+      },
+      "Problema412": {
+        "description": "If-Match no coincide con la version actual del recurso",
         "content": {
           "application/problem+json": {
             "schema": {
@@ -1950,6 +2061,24 @@
           "application/problem+json": {
             "schema": {
               "$ref": "#/components/schemas/Problema"
+            }
+          }
+        }
+      },
+      "Problema429": {
+        "description": "Demasiadas solicitudes (fuerza bruta en el login o limite del gateway de IA)",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problema"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "description": "Segundos a esperar",
+            "schema": {
+              "type": "integer"
             }
           }
         }
@@ -1999,7 +2128,7 @@
             "type": "string",
             "format": "uri",
             "example": "urn:mediconecta:problema:regla-negocio",
-            "description": "urn:mediconecta:problema:{regla-negocio|pedido-invalido|no-autenticado|credenciales-invalidas|acceso-denegado|no-encontrado|transicion-invalida|idempotencia-en-curso|idempotencia-reutilizada|integracion-externa|tiempo-agotado|error-interno}, o about:blank para errores HTTP genericos"
+            "description": "urn:mediconecta:problema:{regla-negocio|pedido-invalido|no-autenticado|credenciales-invalidas|acceso-denegado|no-encontrado|transicion-invalida|idempotencia-en-curso|idempotencia-reutilizada|modificacion-concurrente|precondicion-fallida|demasiadas-solicitudes|integracion-externa|tiempo-agotado|error-interno}, o about:blank para errores HTTP genericos"
           },
           "title": {
             "type": "string",
@@ -2320,8 +2449,18 @@
             "enum": [
               "LEGADO",
               "PARTNER",
-              "NINGUNA"
+              "NINGUNA",
+              "CACHE",
+              "CONTINGENCIA"
             ]
+          },
+          "contingencia": {
+            "type": "boolean",
+            "description": "true si el sistema externo no respondio y el resultado es de respaldo"
+          },
+          "mensaje": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -2447,6 +2586,10 @@
           },
           "urgente": {
             "type": "boolean"
+          },
+          "contingencia": {
+            "type": "boolean",
+            "description": "true si respondio la orientacion de respaldo y no el modelo de IA"
           }
         }
       },

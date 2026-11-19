@@ -78,4 +78,22 @@ class GestionPacientesTest {
     void recepcionPuedeVerCualquierHistorial() {
         assertEquals(0, gestion.historialDeTurnos("28999888").size());
     }
+
+    @Test
+    void unPacienteSoloPuedeConsultarSuPropiaFicha() {
+        escenario.comoUsuario("paciente", Roles.PACIENTE);
+        assertEquals("Ana Gomez", gestion.consultarFicha("30111222").getNombre());
+        assertThrows(ReglaNegocioException.class, () -> gestion.consultarFicha("28999888"),
+                "sin este control un paciente leeria fichas ajenas cambiando la URL");
+
+        escenario.comoUsuario("recepcion", Roles.RECEPCION);
+        assertEquals("Bruno Diaz", gestion.consultarFicha("28999888").getNombre());
+    }
+
+    @Test
+    void laActualizacionConIfMatchViejoSeRechaza() {
+        Paciente datos = new Paciente("Ana M. Gomez", "30111222");
+        assertThrows(VersionDesactualizadaException.class, () -> gestion.actualizarDatos("30111222", datos, 5L));
+        assertEquals("Ana M. Gomez", gestion.actualizarDatos("30111222", datos, 0L).getNombre());
+    }
 }

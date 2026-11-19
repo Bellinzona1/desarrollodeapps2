@@ -3,6 +3,8 @@ package com.mediconecta.integraciones;
 import com.mediconecta.negocio.IntegracionExternaException;
 
 import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
 import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
@@ -41,7 +43,11 @@ import java.util.logging.Logger;
  * <p>La clave solo vive en el servidor: el navegador habla con MediConecta y
  * MediConecta habla con Groq, igual que con los sistemas de obras sociales.</p>
  */
+// NOT_SUPPORTED: una llamada remota no tiene que retener una transaccion, y asi
+// una falla del sistema externo no marca para rollback la del llamador (que
+// necesita seguir viva para responder con el fallback).
 @Stateless
+@TransactionAttribute(TransactionAttributeType.NOT_SUPPORTED)
 public class AdaptadorIaGroq implements OrientadorEspecialidad {
 
     private static final Logger LOG = Logger.getLogger(AdaptadorIaGroq.class.getName());
@@ -64,8 +70,8 @@ public class AdaptadorIaGroq implements OrientadorEspecialidad {
         String cuerpo = armarPedido(modelo, conversacion, especialidades).toString();
 
         Client cliente = ClientBuilder.newBuilder()
-                .connectTimeout(5, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(2, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
                 .build();
         try (Response respuesta = cliente.target(url)
                 .request(MediaType.APPLICATION_JSON)

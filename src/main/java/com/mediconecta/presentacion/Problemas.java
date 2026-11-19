@@ -3,13 +3,16 @@ package com.mediconecta.presentacion;
 import com.mediconecta.modelo.estado.TransicionInvalidaException;
 import com.mediconecta.negocio.ConflictoIdempotenciaException;
 import com.mediconecta.negocio.CredencialesInvalidasException;
+import com.mediconecta.negocio.DemasiadasSolicitudesException;
 import com.mediconecta.negocio.IntegracionExternaException;
 import com.mediconecta.negocio.NoEncontradoException;
 import com.mediconecta.negocio.ReglaNegocioException;
+import com.mediconecta.negocio.VersionDesactualizadaException;
 
 import jakarta.ejb.EJBAccessException;
 import jakarta.json.JsonException;
 import jakarta.json.bind.JsonbException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -79,6 +82,16 @@ public final class Problemas {
                     : TipoProblema.IDEMPOTENCIA_REUTILIZADA;
             return DetalleProblema.de(tipo, error.getMessage(), instancia);
         }
+        if (error instanceof VersionDesactualizadaException) {
+            return DetalleProblema.de(TipoProblema.PRECONDICION_FALLIDA, error.getMessage(), instancia);
+        }
+        if (error instanceof DemasiadasSolicitudesException) {
+            return DetalleProblema.de(TipoProblema.DEMASIADAS_SOLICITUDES, error.getMessage(), instancia);
+        }
+        if (causadoPor(error, OptimisticLockException.class)) {
+            return DetalleProblema.de(TipoProblema.MODIFICACION_CONCURRENTE,
+                    "Otro usuario modifico el recurso al mismo tiempo. Vuelva a cargarlo e intente de nuevo.", instancia);
+        }
         if (error instanceof WebApplicationException web) {
             return deErrorHttp(web.getResponse().getStatus(), instancia);
         }
@@ -105,6 +118,18 @@ public final class Problemas {
             return inesperado(null, instancia);
         }
         return new DetalleProblema(DetalleProblema.SIN_TIPO, titulo, estado, detalle, instancia);
+    }
+
+    static boolean causadoPor(Throwable error, Class<? extends Throwable> tipo) {
+        for (Throwable actual = error; actual != null; actual = actual.getCause()) {
+            if (tipo.isInstance(actual)) {
+                return true;
+            }
+            if (actual.getCause() == actual) {
+                break;
+            }
+        }
+        return false;
     }
 
     /**

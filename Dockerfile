@@ -33,12 +33,13 @@ ENV JBOSS_HOME=/opt/jboss/wildfly
 
 COPY --from=compilacion --chown=jboss:jboss /drivers/postgresql-42.7.4.jar /tmp/postgresql.jar
 COPY --chown=jboss:jboss docker/configurar-wildfly-docker.cli scripts/wildfly/configurar-mensajeria.cli \
-     scripts/wildfly/configurar-limites.cli /tmp/cli/
+     scripts/wildfly/configurar-limites.cli scripts/wildfly/configurar-endurecimiento.cli /tmp/cli/
 
 # Un solo script: el bloque de Docker (abre el servidor embebido), los scripts
 # compartidos con la instalacion local y el cierre del servidor embebido.
 RUN $JBOSS_HOME/bin/jboss-cli.sh --command="module add --name=org.postgresql --resources=/tmp/postgresql.jar --dependencies=jakarta.transaction.api,java.sql,java.logging" \
-    && cat /tmp/cli/configurar-wildfly-docker.cli /tmp/cli/configurar-mensajeria.cli /tmp/cli/configurar-limites.cli > /tmp/cli/todo.cli \
+    && cat /tmp/cli/configurar-wildfly-docker.cli /tmp/cli/configurar-mensajeria.cli /tmp/cli/configurar-limites.cli \
+           /tmp/cli/configurar-endurecimiento.cli > /tmp/cli/todo.cli \
     && echo "stop-embedded-server" >> /tmp/cli/todo.cli \
     && $JBOSS_HOME/bin/jboss-cli.sh --file=/tmp/cli/todo.cli \
     && rm -rf /tmp/cli /tmp/postgresql.jar \
