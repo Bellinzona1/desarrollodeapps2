@@ -1,7 +1,7 @@
 # MediConecta
 
 **Trabajo Práctico Integrador — Desarrollo de Aplicaciones II — UADE**
-**Entrega Obligatoria N.º 2 (2.º parcial)**
+**Entrega Obligatoria N.º 2 (2.º parcial)** · con las mejoras pedidas en la corrección del 13/11
 
 MediConecta es un sistema de gestión de turnos médicos construido sobre **Jakarta EE 10**
 y desplegado en **WildFly**. Tiene componentes de negocio *stateless* y *stateful* en una
@@ -10,10 +10,21 @@ autenticación con **JWT** y autorización por rol, mensajería **JMS** (cola y 
 integración **SOAP + REST**, persistencia con **JPA + PostgreSQL**, tests unitarios y una
 interfaz web que sigue el prototipo de Figma.
 
+Después de la corrección de la 2.ª entrega se sumó lo que faltaba para un sistema
+operable: mensajes JMS en **JSON versionado** con **consumidores idempotentes**,
+**reintentos con backoff y DLQ**; errores en **Problem Details (RFC 9457)**, contrato
+**OpenAPI 3.1**, **`Idempotency-Key`** y **timeouts** en todas las integraciones;
+**cabeceras de seguridad** y **ningún secreto por defecto**; **Docker Compose**, **CI en
+GitHub Actions**, **health check** real y **migraciones Flyway**; **cobertura con JaCoCo**
+(mínimo 80 %) y **linter Checkstyle**. El detalle punto por punto está en
+[docs/Mejoras_Correccion_Entrega_2.md](docs/Mejoras_Correccion_Entrega_2.md).
+
 | | |
 |---|---|
 | **Aplicación** | <http://localhost:8080/mediconecta/> |
-| **Prueba de vida** | <http://localhost:8080/mediconecta/api/salud> |
+| **Health check** | <http://localhost:8080/mediconecta/api/salud> |
+| **API (OpenAPI 3.1)** | <http://localhost:8080/mediconecta/api-docs.html> · contrato en [`openapi.json`](src/main/webapp/openapi.json) |
+| **Mejoras tras la corrección** | [docs/Mejoras_Correccion_Entrega_2.md](docs/Mejoras_Correccion_Entrega_2.md) |
 | **Documento de la entrega** | [docs/Entrega_Obligatoria_2.md](docs/Entrega_Obligatoria_2.md) (cierre del 13/11 en §9) · [Entrega 1](docs/Entrega_Obligatoria_1.md) |
 | **Arquitectura y patrones** | [docs/arquitectura.md](docs/arquitectura.md) |
 | **Guion de la defensa** | [docs/guion-defensa.md](docs/guion-defensa.md) |
@@ -78,6 +89,35 @@ detalle está en [docs/Entrega_Obligatoria_2.md](docs/Entrega_Obligatoria_2.md).
 
 ## 3. Puesta en marcha (copiar y pegar)
 
+### Opción rápida — todo con Docker Compose
+
+Con Docker instalado no hace falta nada más (ni JDK, ni Maven, ni WildFly):
+
+```bash
+cp .env.example .env        # completar las tres claves (openssl rand -base64 48)
+docker compose up -d --build
+docker compose ps            # "app" pasa a "healthy" cuando /api/salud responde
+```
+
+Levanta tres servicios en orden: **db** (PostgreSQL 16 con volumen persistente),
+**migraciones** (Flyway aplica `db/migraciones` y termina) y **app** (WildFly 36 con el
+WAR, arranca recién cuando las migraciones terminaron bien). La aplicación queda en
+<http://localhost:8080/mediconecta/>. Los secretos salen de `.env`, que no se versiona: si
+falta alguno, compose se niega a arrancar y dice cuál.
+
+```bash
+docker compose logs -f app   # log de WildFly
+docker compose down          # apagar (los datos quedan en el volumen)
+docker compose down -v       # apagar y borrar la base
+```
+
+La imagen (`Dockerfile`) se construye en dos etapas: Maven compila el WAR (con el linter)
+y la imagen oficial de WildFly se configura con el CLI en modo embebido usando los
+**mismos scripts** que la instalación local (`scripts/wildfly/configurar-mensajeria.cli` y
+`configurar-limites.cli`). Tiene `HEALTHCHECK` contra `/api/salud`.
+
+Los pasos 1 a 5 de abajo son la instalación manual sobre un WildFly local.
+
 ### Paso 1 — PostgreSQL
 
 **Opción A — Docker (la más rápida):**
@@ -102,14 +142,26 @@ docker run -d --name mediconecta-postgres -e POSTGRES_DB=mediconecta -e POSTGRES
 psql -U postgres -f .\scripts\db\crear-base.sql
 ```
 
-En los dos casos, **las tablas no hay que crearlas**: Hibernate las crea o actualiza sola
-al desplegar el WAR. El esquema equivalente, por si se quiere revisar o crear a mano, está
-en [`scripts/db/esquema.sql`](scripts/db/esquema.sql).
+En los dos casos, las tablas las crean las **migraciones versionadas** de
+[`db/migraciones`](db/migraciones) (Flyway). El paso 2 las aplica solo; a mano:
+
+```powershell
+mvn flyway:migrate -Dflyway.url=jdbc:postgresql://127.0.0.1:5432/mediconecta -Dflyway.password=mediconecta
+mvn flyway:info    -Dflyway.url=jdbc:postgresql://127.0.0.1:5432/mediconecta -Dflyway.password=mediconecta
+```
+
+Hibernate ya no toca el esquema: al desplegar solo lo **valida**
+(`hbm2ddl.auto=validate`). Si falta una migración, el despliegue falla con un mensaje claro
+("Schema-validation: missing table ...") en lugar de romper en la primera consulta. Una base
+que ya tenía las tablas de las Entregas 1 y 2 (creadas por Hibernate) se toma como versión 1
+y solo recibe las migraciones nuevas (`baselineOnMigrate`).
 
 ### Paso 2 — Configurar WildFly
 
 Un solo script deja el servidor listo: instala el driver JDBC como módulo, crea el
-datasource y prepara la seguridad JWT (`integrated-jaspi=false`).
+datasource, aplica las migraciones, configura reintentos/DLQ de JMS y los timeouts del
+servidor, guarda los secretos (JWT y contraseña demo) como propiedades del sistema de
+WildFly y prepara la seguridad JWT (`integrated-jaspi=false`).
 
 ```powershell
 .\scripts\wildfly\configurar-wildfly.ps1 -WildFly "C:\wildfly-36.0.1.Final"
@@ -119,10 +171,14 @@ El script tiene dos momentos:
 
 1. **Con WildFly apagado** descarga el driver de PostgreSQL y lo instala como módulo
    `org.postgresql`.
-2. **Con WildFly encendido** crea el datasource `java:/jdbc/MediConectaDS` y aplica
-   `scripts/wildfly/configurar-seguridad.cli`. Si el servidor todavía no está arriba,
-   levantarlo (`bin\standalone.bat -c standalone-full.xml`) y volver a correr el script con
-   `-SoloDatasource`.
+2. **Con WildFly encendido** crea el datasource `java:/jdbc/MediConectaDS`, corre
+   `mvn flyway:migrate`, aplica `configurar-mensajeria.cli`, `configurar-limites.cli`,
+   `configurar-propiedades.cli` y `configurar-seguridad.cli`. Si el servidor todavía no
+   está arriba, levantarlo (`bin\standalone.bat -c standalone-full.xml`) y volver a correr
+   el script con `-SoloDatasource`.
+
+Parámetros útiles: `-ClaveDemo` (contraseña de los usuarios de demostración, por omisión
+`Demo.2026`), `-SecretoJwt` (si no se pasa se genera uno aleatorio) y `-SinMigraciones`.
 
 Si PostgreSQL no está en `localhost:5432`, pasar la URL: `-UrlBase
 "jdbc:postgresql://127.0.0.1:5433/mediconecta"`.
@@ -146,19 +202,31 @@ C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --command="module add --name=org.postg
 # 2) Datasource (servidor encendido)
 C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --resolve-parameter-values --file=scripts\wildfly\configurar-datasource.cli
 
-# 3) Seguridad JWT (servidor encendido)
+# 3) Migraciones
+mvn flyway:migrate -Dflyway.url=jdbc:postgresql://127.0.0.1:5432/mediconecta -Dflyway.password=mediconecta
+
+# 4) Reintentos/DLQ de JMS y timeouts del servidor (servidor encendido)
+C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --file=scripts\wildfly\configurar-mensajeria.cli
+C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --file=scripts\wildfly\configurar-limites.cli
+
+# 5) Secretos de la aplicacion (servidor encendido)
+C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --resolve-parameter-values -Dmediconecta.cli.jwt=<al menos 32 caracteres> -Dmediconecta.cli.demo=Demo.2026 --file=scripts\wildfly\configurar-propiedades.cli
+
+# 6) Seguridad JWT (servidor encendido)
 C:\wildfly-36.0.1.Final\bin\jboss-cli.bat --connect --file=scripts\wildfly\configurar-seguridad.cli
 ```
 
-El archivo `.cli` toma la URL, el usuario y la contraseña de PostgreSQL como propiedades
-del sistema (`-Dmediconecta.db.usuario=...`), con valores por omisión de desarrollo.
-`--resolve-parameter-values` es necesario para que esos `-D` se apliquen.
+`configurar-datasource.cli` toma la URL, el usuario y la contraseña de PostgreSQL como
+propiedades del sistema (`-Dmediconecta.db.url=... -Dmediconecta.db.usuario=...
+-Dmediconecta.db.clave=...`), **sin valores por omisión**. `--resolve-parameter-values` es
+necesario para que esos `-D` se apliquen.
 
-Opcional: el secreto con el que se firman los JWT se fija con la propiedad del sistema
-`mediconecta.jwt.secreto` (por ejemplo, `bin\standalone.bat -c standalone-full.xml
--Dmediconecta.jwt.secreto=...`, al menos 32 caracteres) o la variable de entorno
-`MEDICONECTA_JWT_SECRETO`. Sin ella se usa un secreto de desarrollo y el log lo advierte.
-**No hay ninguna credencial de base de datos dentro del código Java versionado.**
+**No hay ningún secreto por defecto en el código.** El secreto de los JWT
+(`mediconecta.jwt.secreto` / `MEDICONECTA_JWT_SECRETO`, al menos 32 caracteres) y la
+contraseña de los usuarios de demostración (`mediconecta.demo.clave` /
+`MEDICONECTA_DEMO_CLAVE`) se configuran en el servidor. Si falta el secreto JWT, la
+aplicación genera uno aleatorio al arrancar (los tokens dejan de valer al reiniciar); si
+falta la contraseña demo, **no crea ningún usuario**.
 
 #### Asistente de IA (opcional)
 
@@ -225,9 +293,10 @@ Abrir <http://localhost:8080/mediconecta/> e iniciar sesión.
 
 ## 4. Usuarios de demostración
 
-Son **usuarios ficticios**, creados únicamente para la defensa. Desde la Entrega 2 viven
-en la tabla `usuarios` (contraseña guardada como hash PBKDF2, nunca en claro) y los crea la
-aplicación la primera vez que despliega. Ya no hace falta `add-user.bat`.
+Son **usuarios ficticios**, creados únicamente para la defensa. Viven en la tabla
+`usuarios` (contraseña guardada como hash PBKDF2, nunca en claro) y los crea la aplicación
+la primera vez que despliega, **solo si se configuró su contraseña** (`MEDICONECTA_DEMO_CLAVE`
+en `.env`, o `-ClaveDemo` de `configurar-wildfly.ps1`). En la defensa se usa `Demo.2026`.
 
 | Usuario | Contraseña | Rol | Qué puede hacer |
 |---|---|---|---|
@@ -246,7 +315,14 @@ historial.
 ## 5. API REST
 
 Context root `/mediconecta`, prefijo `/api`. Todos los endpoints exigen un JWT en la
-cabecera `Authorization: Bearer <token>` **salvo `/api/salud` y `/api/auth/login`**.
+cabecera `Authorization: Bearer <token>` **salvo `/api/salud`, `/api/salud/vivo` y
+`/api/auth/login`**.
+
+El contrato completo está en **OpenAPI 3.1**: [`openapi.json`](src/main/webapp/openapi.json),
+navegable en <http://localhost:8080/mediconecta/api-docs.html> (Swagger UI; si hay una
+sesión abierta en la pestaña, "Try it out" usa ese token). Un test unitario
+(`ContratoOpenApiTest`) compara el contrato con los recursos JAX-RS reales: si se agrega un
+endpoint sin documentarlo, el build falla.
 
 ### Autenticación
 
@@ -265,7 +341,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 
 | Método | Ruta | Roles | Respuesta |
 |---|---|---|---|
-| GET | `/api/salud` | público | `200` y el texto **¡Hola desde el contenedor!** |
+| GET | `/api/salud` | público | **Readiness**: verifica PostgreSQL y el broker JMS. `200` `{"estado":"UP","componentes":{"baseDeDatos":"UP","mensajeria":"UP"}}`, o `503` con `"DOWN"` y el componente caído. Lo usan el `HEALTHCHECK` de Docker y el CI |
+| GET | `/api/salud/vivo` | público | **Liveness**: `200` `{"estado":"UP"}` si el WAR atiende, sin tocar dependencias |
 
 ### Sesión
 
@@ -279,8 +356,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | Método | Ruta | Roles | Respuesta |
 |---|---|---|---|
 | GET | `/api/turnos` | RECEPCION, MEDICO, ADMIN | Agenda operativa (sin archivados) ordenada por fecha |
-| GET | `/api/turnos/{id}` | todos | El turno, o `404` (funciona aunque esté archivado) |
-| POST | `/api/turnos` | PACIENTE, RECEPCION, ADMIN | `201` + `Location`, o `400` con la regla incumplida. Un PACIENTE solo puede reservar para sí mismo |
+| GET | `/api/turnos/{id}` | todos | El turno, o `404` (funciona aunque esté archivado). Un PACIENTE solo puede ver los suyos (`400`) |
+| POST | `/api/turnos` | PACIENTE, RECEPCION, ADMIN | `201` + `Location`, o `400` con la regla incumplida. Un PACIENTE solo puede reservar para sí mismo. Acepta **`Idempotency-Key`** (ver abajo) |
+| GET | `/api/turnos/{id}/notificaciones` | todos | Avisos que generaron los consumidores JMS (confirmación, recordatorio, aviso al profesional). Un PACIENTE solo los de sus turnos |
 | PUT | `/api/turnos/{id}/cancelar` | PACIENTE, RECEPCION, MEDICO, ADMIN | El turno en estado `CANCELADO`. Ownership: un PACIENTE solo cancela los propios, un MEDICO solo los de su agenda (`400` si no corresponde). **`409`** si ya estaba cancelado o atendido |
 | PUT | `/api/turnos/{id}/atender` | **MEDICO, ADMIN** | El turno en estado `ATENDIDO`. Un MEDICO solo sobre su agenda (`400`). **`409`** si no está `PROGRAMADO` |
 | PUT | `/api/turnos/{id}/archivar` | **RECEPCION, ADMIN** | Saca de la agenda un turno ya `CANCELADO` sin borrarlo: sigue en el historial del paciente. **`409`** si no está cancelado o si ya estaba archivado |
@@ -310,6 +388,23 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | PUT | `/api/profesionales/{id}/disponibilidad` | **RECEPCION, MEDICO, ADMIN** | Reemplaza la agenda semanal. RECEPCION y ADMIN pueden editar la de cualquiera; un MEDICO solo la propia (`400` si no corresponde) |
 | GET | `/api/profesionales/{id}/horarios-libres?fecha=aaaa-MM-dd` | todos | Horarios disponibles ese día |
 
+#### `Idempotency-Key` en `POST /api/turnos`
+
+Un corte de red o un doble clic pueden hacer que el mismo alta llegue dos veces. Si el
+cliente manda la cabecera `Idempotency-Key` (8 a 100 caracteres; se recomienda un UUID), el
+servidor recuerda la clave durante 24 h, **por usuario**, junto con una huella SHA-256 del
+pedido:
+
+| Caso | Respuesta |
+|---|---|
+| Primera vez | `201`, se crea el turno |
+| Misma clave y mismo pedido | `201` con **el mismo turno** y `Idempotent-Replayed: true`; no se crea otro ni se manda otro mensaje JMS |
+| Misma clave y **otro** pedido | `422` (`idempotencia-reutilizada`) |
+| Dos pedidos simultáneos con la misma clave | el segundo recibe `409` (`idempotencia-en-curso`) y su turno se deshace junto con sus mensajes JMS |
+
+La interfaz la manda siempre: reutiliza la clave si se reintenta el mismo pedido y genera
+una nueva si cambia algún dato. Las claves vencidas las borra un timer EJB (`@Schedule`).
+
 ### Reserva guiada (componente `@Stateful`)
 
 | Método | Ruta | Roles | Qué hace |
@@ -331,17 +426,43 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 |---|---|---|---|
 | GET | `/api/tablero` | RECEPCION, MEDICO, ADMIN | Métricas y próximos turnos, en una sola llamada |
 
-### Formato de los errores
+### Mensajería (operación)
 
-Todos los errores devuelven el mismo cuerpo:
+| Método | Ruta | Roles | Respuesta |
+|---|---|---|---|
+| GET | `/api/mensajeria/mensajes-fallidos` | **ADMIN** | Mensajes JMS que agotaron los reintentos y llegaron a la DLQ `MensajesFallidos` |
+| POST | `/api/mensajeria/mensaje-defectuoso` | **ADMIN** | `202`: manda un mensaje que ningún consumidor entiende, para ver en vivo los 4 intentos (espera de 1, 2 y 4 s) y el pase a la DLQ |
+
+### Formato de los errores — Problem Details (RFC 9457)
+
+Todos los errores salen como `application/problem+json`:
 
 ```json
-{ "error": "No se puede agendar un turno en el pasado.", "codigo": 400 }
+{
+  "type": "urn:mediconecta:problema:regla-negocio",
+  "title": "Regla de negocio incumplida",
+  "status": 400,
+  "detail": "No se puede agendar un turno en el pasado.",
+  "instance": "/mediconecta/api/turnos"
+}
 ```
 
-`400` regla de negocio incumplida · `401` sin token, token inválido o vencido, o
-credenciales incorrectas · `403` rol sin permiso · `404` no existe · **`409` transición de
-estado inválida (patrón State)** · `502` falla un sistema externo.
+El cliente decide con `type` (estable); `detail` es para personas.
+
+| `type` (`urn:mediconecta:problema:...`) | HTTP | Cuándo |
+|---|---|---|
+| `regla-negocio` | 400 | Regla de negocio incumplida (fecha pasada, superposición, ownership) |
+| `pedido-invalido` | 400 | El cuerpo no es un JSON válido para la operación |
+| `no-autenticado` · `credenciales-invalidas` | 401 | Sin token, token inválido o vencido · usuario o contraseña incorrectos |
+| `acceso-denegado` | 403 | El rol no tiene permiso (`@RolesAllowed`) |
+| `no-encontrado` | 404 | La entidad no existe |
+| `transicion-invalida` | 409 | Transición de estado inválida (patrón State) |
+| `idempotencia-en-curso` · `idempotencia-reutilizada` | 409 · 422 | Ver `Idempotency-Key` |
+| `integracion-externa` · `tiempo-agotado` | 502 · 504 | Un sistema externo falló · no respondió a tiempo |
+| `error-interno` | 500 | Error no previsto: sin detalles internos; el `idError` de la respuesta es el mismo que queda en el log |
+
+Los errores que genera JAX-RS (ruta inexistente `404`, método no permitido `405` con
+cabecera `Allow`, `415`) usan `"type": "about:blank"`, como indica la RFC.
 
 ### Compatibilidad con la API de la Entrega 1
 
@@ -372,79 +493,116 @@ Las dos terminan en el mismo objeto de negocio. El detalle está en `PedidoTurno
 ```
 mediconecta/
 ├── pom.xml                                   WAR · Jakarta EE 10 (provided) · Java 17
-├── README.md
+│                                             + plugins: Checkstyle, JaCoCo, Flyway
+├── Dockerfile · compose.yaml · .env.example  imagen de la app y entorno completo
+├── .github/workflows/ci.yml                  CI: linter + tests + cobertura, migraciones, E2E
+├── config/checkstyle/checkstyle.xml          reglas del linter
+├── db/migraciones/                           V1__esquema_inicial.sql · V2__... (Flyway)
+├── docker/configurar-wildfly-docker.cli      configuracion de WildFly dentro de la imagen
 ├── docs/
-│   ├── Entrega_Obligatoria_1.md              documento técnico de la entrega
+│   ├── Entrega_Obligatoria_1.md · _2.md      documentos de cada entrega
+│   ├── Mejoras_Correccion_Entrega_2.md       respuesta punto por punto a la correccion
 │   ├── arquitectura.md                       capas, componentes, patrones y decisiones
 │   ├── guion-defensa.md                      recorrido de la demo, paso a paso
-│   ├── preguntas-defensa.md                  preguntas probables y respuestas cortas
-│   └── trello-actualizaciones.md             estado del tablero
+│   └── preguntas-defensa.md                  preguntas probables y respuestas cortas
 ├── scripts/
-│   ├── smoke-test.ps1                        95 pruebas de la API de punta a punta
+│   ├── smoke-test.sh                         123 pruebas de punta a punta (Linux/macOS, CI)
+│   ├── smoke-test.ps1                        version PowerShell (Windows)
+│   ├── ci/resumen-cobertura.py               tabla de cobertura para GitHub Actions
 │   ├── db/
 │   │   ├── levantar-postgres.ps1             PostgreSQL en Docker
-│   │   ├── crear-base.sql                    base y usuario en un PostgreSQL local
-│   │   └── esquema.sql                       modelo relacional documentado
+│   │   └── crear-base.sql                    base y usuario en un PostgreSQL local
 │   └── wildfly/
-│       ├── configurar-wildfly.ps1            driver + datasource + seguridad, en un paso
-│       ├── configurar-datasource.cli         script de jboss-cli del datasource
+│       ├── configurar-wildfly.ps1            todo en un paso (driver ... seguridad)
+│       ├── configurar-datasource.cli         datasource
+│       ├── configurar-mensajeria.cli         reintentos con backoff y DLQ de JMS
+│       ├── configurar-limites.cli            timeouts de JTA, HTTP y pool de conexiones
+│       ├── configurar-propiedades.cli        secretos como propiedades del sistema
 │       └── configurar-seguridad.cli          integrated-jaspi=false para JWT
 └── src/main/
     ├── java/com/mediconecta/
-    │   ├── modelo/          Paciente · Profesional · Disponibilidad · Turno · EstadoTurno · Usuario
+    │   ├── modelo/          Paciente · Profesional · Disponibilidad · Turno · Usuario
+    │   │                    Notificacion · MensajeFallido · ClaveIdempotencia
     │   │   └── estado/      patron State: TurnoProgramado · TurnoCancelado · TurnoAtendido
-    │   ├── datos/           RepositorioTurnos · RepositorioPacientes · RepositorioProfesionales
+    │   ├── datos/           un Repositorio* por entidad + SondaBaseDeDatos
     │   │   ├── jpa/         implementaciones sobre JPA + PostgreSQL (las activas)
     │   │   └── memoria/     implementaciones en memoria (@Alternative, desactivadas)
     │   ├── negocio/         GestionTurnos · GestionPacientes · GestionProfesionales
     │   │                    AsistenteReservaTurno (@Stateful) · FachadaReservas · FabricaTurnos
-    │   │                    Roles · excepciones · carga de datos de ejemplo
-    │   ├── seguridad/       JWT: MecanismoAutenticacionJwt · ServicioJwt · HashDeClaves
-    │   ├── mensajeria/      JMS: productor + 3 MDB (cola y topico)
-    │   ├── integraciones/   Adapter SOAP + REST de obras sociales (y sus simulaciones)
-    │   └── presentacion/    recursos JAX-RS · ExceptionMappers
-    │                        ConversacionDeReserva (puente sesión HTTP ↔ EJB stateful)
-    ├── resources/META-INF/persistence.xml
+    │   │                    GestionNotificaciones · MonitorSalud · LimpiezaIdempotencia (timer)
+    │   ├── seguridad/       JWT · HashDeClaves · CabecerasSeguridad (cabeceras HTTP)
+    │   ├── mensajeria/      EventoTurno (JSON v1) · productor · 3 MDB idempotentes · monitor DLQ
+    │   ├── integraciones/   Adapter SOAP + REST de obras sociales (con timeouts) · IA
+    │   └── presentacion/    recursos JAX-RS · Problem Details (Problemas, ExceptionMappers)
+    ├── resources/
+    │   ├── META-INF/persistence.xml          hbm2ddl=validate · timeout de consultas
+    │   └── wsdl/                             contrato del sistema legado (SOAP)
     └── webapp/
-        ├── index.html · login.html
+        ├── index.html · login.html · api-docs.html (Swagger UI)
+        ├── openapi.json                      contrato OpenAPI 3.1
         ├── css/styles.css                    design system del prototipo
-        ├── js/                               módulos ES: api, ui, layout y uno por pantalla
-        ├── app/                              pantallas protegidas
-        └── WEB-INF/web.xml · jboss-web.xml · beans.xml
-src/test/java/                                58 tests unitarios JUnit 5
+        ├── js/                               modulos ES: api, ui, layout y uno por pantalla
+        ├── app/                              pantallas
+        └── WEB-INF/web.xml · jboss-web.xml · beans.xml · undertow-handlers.conf (SameSite)
+src/test/java/                                171 tests unitarios JUnit 5
 ```
 
 ---
 
-## 7. Pruebas
+## 7. Calidad y pruebas
 
-### Tests unitarios (sin servidor ni base de datos)
+### Tests unitarios, cobertura y linter (sin servidor ni base de datos)
 
 ```powershell
-mvn test                                                  # los 58
-mvn test -Dtest=EstadoDelTurnoTest                        # una clase
+mvn verify                                                # linter + 171 tests + cobertura minima
+mvn test                                                  # solo linter + tests (informe en target/site/jacoco/)
+mvn test -Dtest=FachadaReservasTest                       # una clase
 mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
 ```
 
-Cubren el patrón State, las reglas de `GestionTurnos`, el Factory, la emisión y validación
-de JWT, el hash de contraseñas, la autenticación, el ruteo del Adapter de cobertura y las reglas del asistente de IA (sin llamar al proveedor). Los EJB
-se prueban como objetos comunes con los repositorios en memoria.
+- **Linter (Checkstyle 10).** Corre en la fase `validate`, antes de compilar: cualquier
+  build falla si el código no respeta [`config/checkstyle/checkstyle.xml`](config/checkstyle/checkstyle.xml)
+  (imports sin usar, `==` entre Strings, `equals` sin `hashCode`, bloques vacíos, nombres,
+  modificadores, etc.).
+- **Cobertura (JaCoCo).** `mvn test` deja el informe en `target/site/jacoco/index.html`;
+  `mvn verify` exige **80 % de líneas** sobre la lógica (hoy ~84 %). Las clases que solo
+  tienen sentido dentro del contenedor (recursos REST, repositorios JPA, sistemas
+  simulados, productor JMS) quedan fuera del mínimo y las cubre la prueba de punta a punta.
+- Los EJB se prueban como objetos comunes con los repositorios en memoria; los MDB, con
+  mensajes JMS simulados. Hay un test que compara `openapi.json` con los recursos reales.
 
-### Prueba de humo (contra la aplicación desplegada)
+### Prueba de punta a punta (contra la aplicación desplegada)
 
-```powershell
-.\scripts\smoke-test.ps1
-.\scripts\smoke-test.ps1 -LogWildFly C:\wildfly-36.0.1.Final\standalone\log\server.log
+```bash
+scripts/smoke-test.sh                                     # http://localhost:8080/mediconecta
+scripts/smoke-test.sh http://localhost:8180/mediconecta   # otro puerto
 ```
 
-Recorre de punta a punta: salud, login JWT (credenciales malas, token adulterado), seguridad
-por roles, turnos (fecha pasada, superposición, ownership, 409 del patrón State), pacientes,
-profesionales, cobertura SOAP/REST, los cuatro pasos del asistente stateful y, con
-`-LogWildFly`, que la cola y el tópico JMS entregaron los mensajes. Devuelve código de salida
-0 si todas pasan.
+```powershell
+.\scripts\smoke-test.ps1 -BaseUrl http://localhost:8080/mediconecta   # Windows
+```
 
-Última ejecución (11/11/2026) sobre WildFly 36.0.1.Final (`standalone-full.xml`) + JDK 24 +
-PostgreSQL 16: **95 pruebas OK, 0 fallidas**.
+Recorre: health check, cabeceras de seguridad, contrato OpenAPI, login JWT (credenciales
+malas, token adulterado), roles, Problem Details, pacientes, profesionales, turnos (fecha
+pasada, superposición, ownership, 409 del patrón State), `Idempotency-Key`, cobertura
+SOAP/REST, los cuatro pasos del asistente stateful, los avisos de los tres consumidores JMS
+y el pase de un mensaje defectuoso a la DLQ. Devuelve 0 si todas pasan. La versión
+PowerShell cubre un subconjunto (sin cabeceras, idempotencia ni DLQ).
+
+Última ejecución de `smoke-test.sh` (19/11/2026): **123 pruebas OK, 0 fallidas**, tanto
+sobre WildFly 36.0.1.Final local (`standalone-full.xml`, JDK 17, PostgreSQL 16) como
+sobre `docker compose`.
+
+### Integración continua (GitHub Actions)
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada push y pull request:
+
+1. **calidad**: `mvn verify` (linter + tests + cobertura mínima); publica el informe de
+   cobertura y el WAR como artefactos y una tabla de cobertura por paquete en el resumen.
+2. **migraciones**: aplica `db/migraciones` sobre un PostgreSQL vacío y las vuelve a
+   correr para comprobar que no rompen nada.
+3. **punta-a-punta**: `docker compose up --build`, espera al health check y corre
+   `scripts/smoke-test.sh`. Si falla, vuelca los logs de los contenedores.
 
 ---
 
@@ -469,8 +627,8 @@ normal de la entrega.
 ## 9. Limitaciones conocidas
 
 - La carga de datos de ejemplo corre una sola vez, cuando la base está vacía. Para volver
-  al estado inicial: `TRUNCATE turnos, disponibilidades, profesionales, pacientes RESTART IDENTITY CASCADE;`
-  y redesplegar.
+  al estado inicial: `TRUNCATE claves_idempotencia, notificaciones, turnos, disponibilidades, profesionales, pacientes RESTART IDENTITY CASCADE;`
+  y redesplegar (o, con Docker, `docker compose down -v`).
 - Un turno ocupa un único horario de inicio; no se modela la duración variable de la
   atención ni el solapamiento parcial entre turnos de distinta duración.
 - Marcar un turno como atendido no registra todavía el detalle de la atención (diagnóstico,
@@ -478,6 +636,11 @@ normal de la entrega.
 - El JWT no se puede revocar antes de que venza (no hay lista de tokens revocados): cerrar
   sesión lo descarta en el navegador. Vence a las 2 horas por omisión
   (`mediconecta.jwt.minutos`).
+- Los consumidores JMS registran los avisos (mail, SMS, agenda) en la tabla
+  `notificaciones` pero no los envían a un proveedor real: ese envío sería otro proceso que
+  lee esa tabla.
+- La documentación interactiva (`api-docs.html`) carga Swagger UI desde jsDelivr (con
+  Subresource Integrity); sin internet se puede leer `openapi.json` igual.
 - Cuando el contenedor rechaza una invocación por rol, WildFly escribe un `EJBAccessException`
   con stack trace completo en el log. Es ruidoso pero correcto, y de hecho resulta útil
   durante la defensa para mostrar que quien rechaza es el contenedor y no la aplicación.
