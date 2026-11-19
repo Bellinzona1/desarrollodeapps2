@@ -21,13 +21,15 @@
 
     <display-name>MediConecta</display-name>
 
-    <!-- 1) Prueba de vida publica. El patron exacto gana sobre /api/*, asi que
-         este recurso queda accesible sin autenticar: es la comprobacion de que
-         el WAR esta desplegado. No tiene auth-constraint a proposito. -->
+    <!-- 1) Health checks publicos (/api/salud y /api/salud/vivo). El patron mas
+         especifico gana sobre /api/*, asi que quedan accesibles sin
+         autenticar: los consultan Docker y el pipeline de CI, que no tienen
+         usuario. No tienen auth-constraint a proposito. -->
     <security-constraint>
         <web-resource-collection>
-            <web-resource-name>Prueba de vida</web-resource-name>
+            <web-resource-name>Salud</web-resource-name>
             <url-pattern>/api/salud</url-pattern>
+            <url-pattern>/api/salud/*</url-pattern>
         </web-resource-collection>
     </security-constraint>
 
@@ -82,6 +84,12 @@
 
     <session-config>
         <session-timeout>30</session-timeout>
+        <!-- La cookie de sesion solo la usa el asistente @Stateful. HttpOnly:
+             ningun script la puede leer. SameSite=Strict lo agrega
+             WEB-INF/undertow-handlers.conf con el handler samesite-cookie de
+             WildFly: el atributo no existe en el esquema 6.0 de web.xml y
+             Undertow ignora SessionCookieConfig.setAttribute("SameSite"). Ese
+             archivo no admite comentarios, por eso la explicacion esta aca. -->
         <cookie-config>
             <http-only>true</http-only>
         </cookie-config>

@@ -102,6 +102,7 @@ class GestionTurnosTest {
         Turno turno = agendarManana();
         comoUsuario("otro-paciente", Roles.PACIENTE);
         assertThrows(ReglaNegocioException.class, () -> gestion.cancelarTurno(turno.getId()));
+        comoUsuario("recepcion", Roles.RECEPCION);
         assertEquals(EstadoTurno.PROGRAMADO, gestion.obtenerTurno(turno.getId()).getEstado());
     }
 
@@ -148,5 +149,20 @@ class GestionTurnosTest {
     @Test
     void unTurnoInexistenteDaNoEncontrado() {
         assertThrows(NoEncontradoException.class, () -> gestion.obtenerTurno(999L));
+    }
+
+    @Test
+    void unPacienteSoloPuedeConsultarSusPropiosTurnos() {
+        Turno turno = agendarManana();
+
+        comoUsuario("paciente", Roles.PACIENTE);
+        assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
+
+        comoUsuario("otro-paciente", Roles.PACIENTE);
+        assertThrows(ReglaNegocioException.class, () -> gestion.obtenerTurno(turno.getId()),
+                "sin este control un paciente podria leer turnos ajenos recorriendo ids");
+
+        comoUsuario("medico", Roles.MEDICO);
+        assertEquals(turno.getId(), gestion.obtenerTurno(turno.getId()).getId());
     }
 }

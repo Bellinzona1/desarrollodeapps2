@@ -51,8 +51,24 @@ public class GestionTurnos {
         return repositorio.listarAgenda();
     }
 
+    /**
+     * Un turno por id. Un PACIENTE solo puede consultar los suyos: sin este
+     * control, cualquier paciente podria recorrer los ids y leer los turnos de
+     * los demas (IDOR).
+     */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public Turno obtenerTurno(Long id) {
+        Turno turno = buscar(id);
+        if (esSoloPaciente()) {
+            String usuario = contexto.getCallerPrincipal().getName();
+            if (!usuario.equals(turno.getPaciente().getUsuario())) {
+                throw new ReglaNegocioException("Solo puede consultar sus propios turnos.");
+            }
+        }
+        return turno;
+    }
+
+    private Turno buscar(Long id) {
         return repositorio.buscarPorId(id)
                 .orElseThrow(() -> NoEncontradoException.turno(id));
     }
@@ -128,7 +144,7 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
     public Turno cancelarTurno(Long id) {
-        Turno turno = obtenerTurno(id);
+        Turno turno = buscar(id);
 
         exigirPuedeCancelar(turno);
 
@@ -147,7 +163,7 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.MEDICO, Roles.ADMIN})
     public Turno atenderTurno(Long id) {
-        Turno turno = obtenerTurno(id);
+        Turno turno = buscar(id);
 
         if (esSoloMedico()) {
             String usuario = contexto.getCallerPrincipal().getName();
@@ -200,7 +216,7 @@ public class GestionTurnos {
      */
     @RolesAllowed({Roles.RECEPCION, Roles.ADMIN})
     public Turno archivarTurno(Long id) {
-        Turno turno = obtenerTurno(id);
+        Turno turno = buscar(id);
 
         // Solo TurnoCancelado acepta archivar, y una unica vez (409 si no).
         turno.archivar();

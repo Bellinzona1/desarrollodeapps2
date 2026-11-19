@@ -1469,3 +1469,72 @@ table.tabla tbody tr:last-child td {
 .dia-atencion:disabled small {
     color: var(--muted);
 }
+
+/* ===================================================================
+   Utilidades de espaciado y alineacion
+   -------------------------------------------------------------------
+   Reemplazan a los atributos style="..." que habia en el HTML y en los
+   fragmentos que arma el JS. Sin estilos en linea, la Content-Security-
+   Policy puede ser estricta (style-src 'self'): ver
+   seguridad.CabecerasSeguridad.
+   =================================================================== */
+
+.u-centrado { text-align: center; }
+.u-m-0 { margin: 0; }
+.u-mt-12 { margin-top: 12px; }
+.u-mt-16 { margin-top: 16px; }
+.u-mt-20 { margin-top: 20px; }
+.u-mt-24 { margin-top: 24px; }
+.u-mb-8 { margin-bottom: 8px; }
+.u-mb-10 { margin-bottom: 10px; }
+.u-mb-16 { margin-bottom: 16px; }
+.u-mb-20 { margin-bottom: 20px; }
+.u-my-ayuda { margin: 6px 0 14px; }
+.u-my-ayuda-form { margin: 8px 0 20px; }
+.u-ancho-240 { max-width: 240px; }
+
+.fila-espaciada {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.celda-acciones {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.franja--editable {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+/* ---- Avisos enviados por los consumidores JMS (detalle del turno) ---- */
+
+.avisos-turno {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.avisos-turno__item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.avisos-turno__canal {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.avisos-turno__texto {
+    margin: 6px 0 0;
+}
