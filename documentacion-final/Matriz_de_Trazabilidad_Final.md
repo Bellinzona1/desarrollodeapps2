@@ -1,5 +1,7 @@
 # MediConecta — Matriz de trazabilidad final (v2)
 
+> **Auditoría posterior (20/11/2026, base `0ae0371`):** las métricas y estados de este documento corresponden a la revisión histórica indicada abajo. Para el cumplimiento vigente y las brechas comprobadas, ver [Checklist_Requisitos_Finales.md](Checklist_Requisitos_Finales.md). No se acredita cumplimiento total.
+
 **Fecha:** 20/11/2026 · **Código:** `eda4b02` · **Reemplaza a:** `docs/Matriz_de_Trazabilidad.md` (v1).
 ✔ verificado con evidencia ejecutada · ◐ parcial · ✗ sin verificar. "Humo" = sección de `scripts/smoke-test.sh` (148/148 en CI run #4).
 

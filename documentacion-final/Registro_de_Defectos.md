@@ -24,4 +24,20 @@ Los Id de Jira deben completarse al cargar cada defecto (G5).
 | O-02 | Menor | `SondaMensajeria.responde()` y `MonitorSalud.verificar()` sin `@RolesAllowed`/`@PermitAll` | Anotar explícitamente |
 | O-03 | Menor | Capturas de la presentación y el informe son de la interfaz anterior (17/09) | Tomar capturas nuevas |
 
-Defectos abiertos Bloqueantes o Críticos: **0**.
+Defectos abiertos Bloqueantes o Críticos: **0 en el registro histórico anterior**; no acredita el estado del release actual. Ver la auditoría posterior y contrastar con Jira.
+
+## Auditoría posterior del 20/11/2026 (base `0ae0371`)
+
+Los IDs siguientes son locales, todavía sin ticket Jira ni responsable designado.
+
+| Id | Severidad / prioridad | Reproducción; esperado vs. observado | Causa raíz | Corrección / evidencia | Estado |
+|---|---|---|---|---|---|
+| D-11 | Mayor / Alta | Ejecutar CI sin SONAR_TOKEN: debería impedir acreditar Quality Gate; el job terminaba exitosamente sin análisis | Paso informativo en vez de fallo obligatorio | CI exige token, organización y proyecto. Validado YAML; falta ejecución remota con Sonar | Corregido localmente, validación remota pendiente |
+| D-12 | Mayor / Alta | Escanear imagen con HIGH/CRITICAL: debería bloquear; no tenía exit-code 1 y ocultaba vulnerabilidades sin arreglo | Gate SCA incompleto; shell implícito no garantiza pipefail en pipelines con tee | Trivy exige exit-code 1, sin ignore-unfixed; shell bash explícito activa pipefail en Actions | Corregido localmente, escaneo pendiente |
+| D-13 | Mayor / Alta | Comparar checklist con contrato/tests/evidencias: declaraba todos los ejes cumplidos, aunque no había validación de esquemas ni trazabilidad completa | Se confundía configuración con evidencia; documentos de diferentes revisiones | Checklist sustituido por auditoría criterio por criterio y avisos en documentos históricos | Corregido el checklist; paquete PDF y matriz pendientes |
+| D-14 | Mayor / Alta | Ejecutar verify sin Docker: 6 IT omitidos y build verde; no sirve para acreditar integración | disabledWithoutDocker=true sin control del resultado en CI | Nuevo verificador de tres inventarios JUnit rechaza omisiones y ausencia de IT; se probaron sus caminos de aceptación/rechazo | Corregido localmente |
+| D-15 | Mayor / Media | Un endpoint lento podía quedar diluido entre los restantes: el umbral de k6 era global | Falta segmentación por endpoint | Etiquetas y umbrales para agenda, padrón y tablero; sintaxis JS validada | Corregido localmente, carga completa pendiente |
+
+O-01 está superada en el código actual por `DisyuntorDeIntegracion`, probado con JUnit.
+Las demás brechas de [Checklist_Requisitos_Finales.md](Checklist_Requisitos_Finales.md) requieren
+triage, responsable y tickets; no son un diagnóstico automático de vulnerabilidades explotables.

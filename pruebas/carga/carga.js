@@ -47,6 +47,13 @@ export const options = {
         http_req_duration: ['p(95)<500'],
         http_req_failed: ['rate<0.01'],
         checks: ['rate>0.99'],
+        // Cada endpoint critico debe cumplir, aunque el promedio global sea bueno.
+        'http_req_duration{endpoint:agenda}': ['p(95)<500'],
+        'http_req_failed{endpoint:agenda}': ['rate<0.01'],
+        'http_req_duration{endpoint:padron}': ['p(95)<500'],
+        'http_req_failed{endpoint:padron}': ['rate<0.01'],
+        'http_req_duration{endpoint:tablero}': ['p(95)<500'],
+        'http_req_failed{endpoint:tablero}': ['rate<0.01'],
     },
 };
 
@@ -78,9 +85,10 @@ export default function (datos) {
     const paciente = { headers: { Authorization: `Bearer ${datos.paciente}` }, tags: { rol: 'paciente' } };
 
     group('recepcion', () => {
-        check(http.get(`${BASE}/api/turnos`, recepcion), { 'agenda 200': (r) => r.status === 200 });
-        check(http.get(`${BASE}/api/pacientes?q=go`, recepcion), { 'padron 200': (r) => r.status === 200 });
-        check(http.get(`${BASE}/api/tablero`, recepcion), { 'tablero 200': (r) => r.status === 200 });
+        for (const [endpoint, ruta] of [['agenda', '/turnos'], ['padron', '/pacientes?q=go'], ['tablero', '/tablero']]) {
+            const parametros = { ...recepcion, tags: { ...recepcion.tags, endpoint } };
+            check(http.get(`${BASE}/api${ruta}`, parametros), { [`${endpoint} 200`]: (r) => r.status === 200 });
+        }
     });
 
     group('paciente', () => {

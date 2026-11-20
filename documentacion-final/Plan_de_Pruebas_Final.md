@@ -1,5 +1,7 @@
 # MediConecta — Plan de pruebas final (v2)
 
+> **Auditoría posterior (20/11/2026, base `0ae0371`):** las métricas y estados de este documento corresponden a la revisión histórica indicada abajo. Para el cumplimiento vigente y las brechas comprobadas, ver [Checklist_Requisitos_Finales.md](Checklist_Requisitos_Finales.md). No se acredita cumplimiento total.
+
 **Fecha:** 20/11/2026 · **Código de referencia:** `eda4b02` (rama `integracion-final`) ·
 **Reemplaza a:** `docs/Plan_de_Pruebas.md` (v1, 19/11, rama de Bellinzona).
 Estructura basada en ISO/IEC/IEEE 29119-3, según los *Criterios de Testing* (Clase 15).

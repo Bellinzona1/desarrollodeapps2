@@ -1,5 +1,7 @@
 # MediConecta — Informe de seguridad y calidad
 
+> **Auditoría posterior (20/11/2026, base `0ae0371`):** las métricas y estados de este documento corresponden a la revisión histórica indicada abajo. Para el cumplimiento vigente y las brechas comprobadas, ver [Checklist_Requisitos_Finales.md](Checklist_Requisitos_Finales.md). No se acredita cumplimiento total.
+
 **Fecha:** 20/11/2026 · **Código:** `eda4b02` · **CI:** run #4 (https://github.com/tobiasbonomo29/desarrollo-de-apps2/actions/runs/44658335940)
 
 ## 1. Matriz SEC (eje D)

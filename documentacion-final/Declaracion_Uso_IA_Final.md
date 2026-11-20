@@ -61,3 +61,11 @@ Todo test o cambio asistido por IA debe estar revisado por un integrante que pue
 | Facundo Morán | | | |
 | Tobías Bonomo | | | |
 | Laureano Gómez Moreno | | | |
+
+## 5. Intervención posterior: auditoría de testing del 20/11/2026
+
+- Herramienta: Codex (OpenAI); versión exacta del cliente/modelo pendiente de confirmar por el integrante.
+- Pedido representativo: «Fijate que en este proyecto se cumpla todos los criterios de testing», con el PDF de Clase 15.
+- Trabajo: comparación de rúbrica, código y evidencia; ejecución de Maven con PostgreSQL real; controles de Sonar, SCA, estabilidad y carga; corrección del checklist.
+- Corrección de un diagnóstico anterior: se descartó la afirmación «cumple todos los ejes» porque el test OpenAPI compara rutas y no valida esquemas de respuestas, y porque faltan pruebas/evidencias exigidas.
+- Verificación automática: build limpio, Checkstyle, JaCoCo, JUnit y Testcontainers. Consultar el checklist y las evidencias de auditoría. La revisión humana y firma de estos cambios siguen pendientes.

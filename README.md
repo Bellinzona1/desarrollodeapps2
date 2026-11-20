@@ -643,22 +643,43 @@ Son **151 pruebas**; las corre el CI en cada push contra Docker Compose.
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en cada push y pull request:
 
-1. **calidad**: `./mvnw verify` (enforcer + linter + tests + cobertura mínima total y de
+1. **calidad**: tres ejecuciones de `./mvnw clean verify` (enforcer + linter + tests + cobertura mínima total y de
    negocio); publica el informe de cobertura, el WAR y una tabla de cobertura por paquete.
 2. **mutacion**: PIT sobre la capa de negocio (falla con menos de 60 %).
 3. **secretos**: gitleaks sobre todo el historial.
 4. **sonar**: análisis y Quality Gate de SonarCloud (necesita el secreto `SONAR_TOKEN`;
-   ver plan de pruebas §5).
+   ver la configuración de SonarCloud debajo).
 5. **migraciones**: aplica `db/migraciones` sobre un PostgreSQL vacío y las vuelve a
    correr para comprobar que no rompen nada.
 6. **punta-a-punta**: `docker compose up --build`, espera al health check, corre
    `scripts/smoke-test.sh`, las pruebas E2E de interfaz (Playwright), la prueba de carga
    k6 (50 usuarios × 5 min, p95 < 500 ms) y el escaneo OWASP ZAP baseline (falla con
    alertas High). Si falla, vuelca los logs de los contenedores.
-7. **dependencias**: Trivy sobre `pom.xml` y `package-lock.json` (falla con HIGH/CRITICAL
-   que tengan arreglo) y sobre la imagen Docker (informe).
+7. **dependencias**: Trivy sobre el repositorio y la imagen Docker; falla con HIGH/CRITICAL,
+   incluidas las vulnerabilidades que todavía no tengan arreglo.
 8. **zap-activo**: ZAP API scan activo, autenticado con un JWT, sobre todas las operaciones
    de `openapi.json` (falla con alertas High).
+
+
+### Activar SonarCloud en el repositorio personal
+
+Repositorio elegido: `Bellinzona1/desarrollodeapps2`.
+
+1. Entrar en [SonarQube Cloud](https://sonarcloud.io/) con GitHub e importar ese repositorio.
+2. Elegir análisis mediante CI para Maven y desactivar el análisis automático si está habilitado.
+3. Copiar la **Organization Key** y la **Project Key** que muestra Sonar (no inferirlas del nombre del repositorio).
+4. En [las variables de Actions](https://github.com/Bellinzona1/desarrollodeapps2/settings/variables/actions),
+   crear `SONAR_ORGANIZACION` y `SONAR_PROYECTO` con esas claves.
+5. Generar un token de análisis en Sonar y guardarlo como `SONAR_TOKEN` en
+   [los secretos de Actions](https://github.com/Bellinzona1/desarrollodeapps2/settings/secrets/actions).
+   No escribir el token en archivos versionados ni en el chat.
+6. En Actions, volver a ejecutar el job **sonar** del CI de la revisión publicada tras configurar las claves.
+   El job `sonar` espera al Quality Gate y falla si no se aprueba; conserva la referencia
+   del análisis como artefacto `referencia-sonar`.
+
+La configuración preparada no equivale a un análisis aprobado. Sin proyecto y token, el job
+falla indicando qué falta. La fecha de un tag nuevo es la fecha real de creación: no acredita
+el plazo histórico del 10/11/2026.
 
 ---
 

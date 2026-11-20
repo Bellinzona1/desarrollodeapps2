@@ -10,8 +10,7 @@
 #                      ramas en la capa de negocio). Publica informe y WAR.
 #    2. mutacion:      PIT sobre la capa de negocio; falla con score < 60 %.
 #    3. secretos:      gitleaks sobre TODO el historial del repositorio.
-#    4. sonar:         analisis + Quality Gate de SonarCloud (solo si el
-#                      repositorio tiene el secreto SONAR_TOKEN).
+#    4. sonar:         analisis + Quality Gate obligatorio de SonarCloud.
 #    5. migraciones:   db/migraciones sobre un PostgreSQL vacio, dos veces.
 #    6. punta-a-punta: Docker Compose (base + migraciones + WildFly), prueba de
 #                      humo completa, prueba de carga k6 (p95 < 500 ms) y
@@ -23,9 +22,15 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    # Propaga fallos de scanners y k6 aunque la salida se copie con tee.
+    shell: bash
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -45,8 +50,22 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: ./mvnw verify (enforcer + Checkstyle + JUnit + JaCoCo)
-        run: ./mvnw -B verify
+      - name: Tres ejecuciones limpias (JUnit, PostgreSQL real y cobertura)
+        run: |
+          for corrida in 1 2 3; do
+            ./mvnw -B clean verify
+            mkdir -p "informes-estabilidad/$corrida"
+            cp -R target/surefire-reports target/failsafe-reports "informes-estabilidad/$corrida/"
+          done
+          python3 scripts/ci/verificar-estabilidad.py informes-estabilidad/{1,2,3}
+
+      - name: Evidencia de las tres ejecuciones
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: estabilidad-junit
+          path: informes-estabilidad/
+          if-no-files-found: error
 
       - name: Resumen de cobertura
         if: always()
@@ -125,9 +144,15 @@ jobs:
           java-version: "17"
           cache: maven
 
-      - name: Sin SONAR_TOKEN no se analiza
-        if: env.SONAR_TOKEN == ''
-        run: echo "Configurar el secreto SONAR_TOKEN y las variables SONAR_ORGANIZACION y SONAR_PROYECTO (ver docs/Plan_de_Pruebas.md)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Exigir configuracion del Quality Gate
+        env:
+          SONAR_ORGANIZACION: ${{ vars.SONAR_ORGANIZACION }}
+          SONAR_PROYECTO: ${{ vars.SONAR_PROYECTO }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_ORGANIZACION" ] || [ -z "$SONAR_PROYECTO" ]; then
+            echo "::error::Configurar SONAR_TOKEN, SONAR_ORGANIZACION y SONAR_PROYECTO. Sin analisis no se acredita el Quality Gate."
+            exit 1
+          fi
 
       - name: Analisis y espera del Quality Gate
         if: env.SONAR_TOKEN != ''
@@ -137,6 +162,14 @@ jobs:
           -Dsonar.organization=${{ vars.SONAR_ORGANIZACION }}
           -Dsonar.projectKey=${{ vars.SONAR_PROYECTO }}
           -Dsonar.qualitygate.wait=true
+
+      - name: Referencia del analisis Sonar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: referencia-sonar
+          path: target/sonar/report-task.txt
+          if-no-files-found: ignore
 
   migraciones:
     name: Migraciones sobre una base vacia
@@ -256,17 +289,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Trivy sobre el repositorio (corta ante HIGH o CRITICAL con arreglo)
+      - name: Trivy sobre el repositorio (corta ante HIGH o CRITICAL)
         run: |
           docker run --rm -v "$PWD:/src:ro" aquasec/trivy:0.58.1 fs --scanners vuln \
-            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress /src | tee trivy-repo.txt
+            --severity HIGH,CRITICAL --exit-code 1 --no-progress /src | tee trivy-repo.txt
 
-      - name: Trivy sobre la imagen Docker (informe)
+      - name: Trivy sobre la imagen Docker (corta ante HIGH o CRITICAL)
         run: |
           docker build -q -t mediconecta:sca .
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image \
-            --severity HIGH,CRITICAL --ignore-unfixed --no-progress mediconecta:sca | tee trivy-imagen.txt
-          { echo "### Trivy (imagen)"; echo '```'; grep -E '^Total|^mediconecta|^opt/' trivy-imagen.txt | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            --severity HIGH,CRITICAL --exit-code 1 --no-progress mediconecta:sca | tee trivy-imagen.txt
+          { echo "### Trivy (imagen)"; echo '```'; awk '/^Total|^mediconecta|^opt\// { if (++n <= 20) print }' trivy-imagen.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Informes de Trivy
         if: always()
