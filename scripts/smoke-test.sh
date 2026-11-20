@@ -365,7 +365,7 @@ if [ -n "$ID_ANA" ]; then
     invocar GET "/api/turnos/$ID_ANA" "" paciente
     probar "Un PACIENTE si puede leer su propio turno" "codigo=$CODIGO" '[ "$CODIGO" = 200 ]'
     invocar PUT "/api/turnos/$ID_ANA/cancelar" "" medico
-    probar "Un MEDICO no puede cancelar un turno fuera de su agenda (400)" "codigo=$CODIGO" '[ "$CODIGO" = 400 ]'
+    probar "Un MEDICO no puede cancelar un turno fuera de su agenda (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
     invocar PUT "/api/turnos/$ID_ANA/cancelar" "" paciente
     probar "Un PACIENTE puede cancelar su propio turno (200)" "codigo=$CODIGO" '[ "$CODIGO" = 200 ] && [ "$(dato .estado)" = CANCELADO ]'
     invocar PUT "/api/turnos/$ID_ANA/archivar" "" paciente
