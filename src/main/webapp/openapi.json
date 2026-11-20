@@ -311,7 +311,7 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "Un PACIENTE solo puede ver su propia ficha (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "Un PACIENTE solo puede ver su propia ficha (`403`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/Documento"
@@ -1631,7 +1631,7 @@
           "MEDICO",
           "ADMIN"
         ],
-        "description": "Un PACIENTE solo puede consultar los suyos (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
+        "description": "Un PACIENTE solo puede consultar los suyos (`403`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.\n\n**Roles:** PACIENTE, RECEPCION, MEDICO, ADMIN.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdTurno"
@@ -2016,7 +2016,7 @@
         }
       },
       "Problema403": {
-        "description": "El rol no tiene permiso",
+        "description": "El rol no tiene permiso, o el recurso es de otro usuario (BOLA)",
         "content": {
           "application/problem+json": {
             "schema": {

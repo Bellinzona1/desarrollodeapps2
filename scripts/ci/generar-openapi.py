@@ -75,7 +75,7 @@ agregar("/turnos","post",op("Reservar un turno",RESERVA,{
     "Misma clave con otro cuerpo: `422`. Dos pedidos simultaneos con la misma clave: el segundo recibe `409`.",
     cuerpo=ref("PedidoTurno"),parametros=[{"$ref":"#/components/parameters/IdempotencyKey"}],tag="Turnos",opid="crearTurno"))
 agregar("/turnos/{id}","get",op("Un turno",TODOS,{"200":json_ok(ref("Turno"),"El turno, con su ETag",H_ETAG),**R304,**problemas(400,404)},
-    "Un PACIENTE solo puede consultar los suyos (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.",parametros=[P_ID_TURNO,P_IF_NONE],tag="Turnos",opid="obtenerTurno"))
+    "Un PACIENTE solo puede consultar los suyos (`403`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.",parametros=[P_ID_TURNO,P_IF_NONE],tag="Turnos",opid="obtenerTurno"))
 agregar("/turnos/{id}/notificaciones","get",op("Avisos generados por JMS para el turno",TODOS,{"200":json_ok(lista("Notificacion")),**problemas(400,404)},
     "Confirmacion (cola), recordatorio y aviso al profesional (topico). Los generan los consumidores JMS de forma asincronica: pueden tardar unos segundos en aparecer.",
     parametros=[P_ID_TURNO],tag="Turnos",opid="notificacionesDeTurno"))
@@ -90,7 +90,7 @@ agregar("/pacientes","get",op("Padron de pacientes",["RECEPCION","MEDICO","ADMIN
 agregar("/pacientes","post",op("Registrar un paciente",RESERVA,{"201":json_ok(ref("Paciente"),"Paciente creado"),**problemas(400)},cuerpo=ref("Paciente"),tag="Pacientes",opid="registrarPaciente"))
 agregar("/pacientes/mi-ficha","get",op("Ficha del paciente logueado",TODOS,{"200":json_ok(ref("Paciente")),**problemas(404)},tag="Pacientes",opid="miFicha"))
 agregar("/pacientes/{documento}","get",op("Un paciente",TODOS,{"200":json_ok(ref("Paciente"),"La ficha, con su ETag",H_ETAG),**R304,**problemas(400,404)},
-    "Un PACIENTE solo puede ver su propia ficha (`400`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.",parametros=[P_DOC,P_IF_NONE],tag="Pacientes",opid="obtenerPaciente"))
+    "Un PACIENTE solo puede ver su propia ficha (`403`, BOLA). Devuelve `ETag`; con `If-None-Match` igual responde `304`.",parametros=[P_DOC,P_IF_NONE],tag="Pacientes",opid="obtenerPaciente"))
 agregar("/pacientes/{documento}","put",op("Actualizar un paciente",["RECEPCION","ADMIN"],{"200":json_ok(ref("Paciente"),"La ficha con su ETag nuevo",H_ETAG),**problemas(400,404,409,412)},
     "Con `If-Match` (opcional) solo se aplica si la ficha sigue en esa version; si no, `412`.",cuerpo=ref("Paciente"),parametros=[P_DOC,P_IF_MATCH],tag="Pacientes",opid="actualizarPaciente"))
 agregar("/pacientes/{documento}/turnos","get",op("Historial de turnos del paciente",TODOS,{"200":json_ok(lista("Turno")),**problemas(400,404)},"Un PACIENTE solo puede ver el suyo.",parametros=[P_DOC],tag="Pacientes",opid="historial"))
@@ -183,7 +183,7 @@ schemas={
      "componentes":{"type":"object","additionalProperties":{"type":"string","enum":["UP","DOWN"]},"example":{"baseDeDatos":"UP","mensajeria":"UP"}},
      "verificadoEn":{"type":"string","format":"date-time"}}},
 }
-desc_resp={400:"Pedido invalido o regla de negocio incumplida",401:"Falta el token o es invalido",403:"El rol no tiene permiso",404:"No existe el recurso",
+desc_resp={400:"Pedido invalido o regla de negocio incumplida",401:"Falta el token o es invalido",403:"El rol no tiene permiso, o el recurso es de otro usuario (BOLA)",404:"No existe el recurso",
    409:"Conflicto con el estado actual (transicion invalida, pedido repetido en curso o modificacion concurrente)",412:"If-Match no coincide con la version actual del recurso",422:"Idempotency-Key reutilizada con otro pedido",429:"Demasiadas solicitudes (fuerza bruta en el login o limite del gateway de IA)",
    500:"Error inesperado (sin detalles internos; ver idError)",502:"Fallo un sistema externo",504:"Un sistema externo no respondio a tiempo"}
 responses={"Problema%d"%c:{"description":d,"content":{"application/problem+json":{"schema":ref("Problema")}}} for c,d in desc_resp.items()}
