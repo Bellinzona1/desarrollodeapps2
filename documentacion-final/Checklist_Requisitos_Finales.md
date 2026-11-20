@@ -5,7 +5,11 @@
 El PDF se usa como rúbrica: no autoriza publicar en Teams/Jira, firmar por integrantes,
 crear tags retroactivos ni reescribir el historial.
 
-**Alcance acordado posteriormente con el usuario:** completar Sonar y publicar el tag en
+**Actualización de alcance:** el usuario decidió conservar únicamente los jobs de calidad,
+PIT y gitleaks. Sonar y los demás jobs se retiraron del pipeline. El tag `v1.0-testing`
+ya fue publicado; conserva la configuración anterior. La auditoría siguiente es histórica.
+
+**Alcance anterior acordado con el usuario:** completar Sonar y publicar el tag en
 `Bellinzona1/desarrollodeapps2`. Se excluyeron de este trabajo adicional la validación de
 contratos, trazabilidad, evidencias de seguridad/carga/resiliencia, tratamiento del secreto
 histórico, Jira, Teams y declaración de IA. La matriz de abajo se conserva como comparación
