@@ -359,7 +359,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mediconecta/api/tur
 | Método | Ruta | Roles | Respuesta |
 |---|---|---|---|
 | GET | `/api/turnos` | RECEPCION, MEDICO, ADMIN | Agenda operativa (sin archivados) ordenada por fecha |
-| GET | `/api/turnos/{id}` | todos | El turno con su **`ETag`**, o `404` (funciona aunque esté archivado). Un PACIENTE solo puede ver los suyos (`400`). Con `If-None-Match` igual → `304` |
+| GET | `/api/turnos/{id}` | todos | El turno con su **`ETag`**, o `404` (funciona aunque esté archivado). Un PACIENTE solo puede ver los suyos (`403`). Con `If-None-Match` igual → `304` |
 | POST | `/api/turnos` | PACIENTE, RECEPCION, ADMIN | `201` + `Location`, o `400` con la regla incumplida. Un PACIENTE solo puede reservar para sí mismo. Acepta **`Idempotency-Key`** (ver abajo) |
 | GET | `/api/turnos/{id}/notificaciones` | todos | Avisos que generaron los consumidores JMS (confirmación, recordatorio, aviso al profesional). Un PACIENTE solo los de sus turnos |
 
@@ -368,8 +368,8 @@ aceptan **`If-Match`** con el ETag: si otro usuario modificó el recurso en el m
 responden `412` (`precondicion-fallida`) y no pisan el cambio. Sin la cabecera funcionan
 como antes. `GET /api/pacientes/{documento}` también devuelve ETag (y un PACIENTE solo
 puede leer su propia ficha).
-| PUT | `/api/turnos/{id}/cancelar` | PACIENTE, RECEPCION, MEDICO, ADMIN | El turno en estado `CANCELADO`. Ownership: un PACIENTE solo cancela los propios, un MEDICO solo los de su agenda (`400` si no corresponde). **`409`** si ya estaba cancelado o atendido |
-| PUT | `/api/turnos/{id}/atender` | **MEDICO, ADMIN** | El turno en estado `ATENDIDO`. Un MEDICO solo sobre su agenda (`400`). **`409`** si no está `PROGRAMADO` |
+| PUT | `/api/turnos/{id}/cancelar` | PACIENTE, RECEPCION, MEDICO, ADMIN | El turno en estado `CANCELADO`. Ownership: un PACIENTE solo cancela los propios, un MEDICO solo los de su agenda (`403` si no corresponde). **`409`** si ya estaba cancelado o atendido |
+| PUT | `/api/turnos/{id}/atender` | **MEDICO, ADMIN** | El turno en estado `ATENDIDO`. Un MEDICO solo sobre su agenda (`403`). **`409`** si no está `PROGRAMADO` |
 | PUT | `/api/turnos/{id}/archivar` | **RECEPCION, ADMIN** | Saca de la agenda un turno ya `CANCELADO` sin borrarlo: sigue en el historial del paciente. **`409`** si no está cancelado o si ya estaba archivado |
 
 ### Pacientes
@@ -394,7 +394,7 @@ puede leer su propia ficha).
 | GET | `/api/profesionales/especialidades` | todos | Especialidades con profesionales activos |
 | GET | `/api/profesionales/{id}` | todos | El profesional, o `404` |
 | POST | `/api/profesionales` | **ADMIN** | `201`, o `403` si el rol no corresponde |
-| PUT | `/api/profesionales/{id}/disponibilidad` | **RECEPCION, MEDICO, ADMIN** | Reemplaza la agenda semanal. RECEPCION y ADMIN pueden editar la de cualquiera; un MEDICO solo la propia (`400` si no corresponde) |
+| PUT | `/api/profesionales/{id}/disponibilidad` | **RECEPCION, MEDICO, ADMIN** | Reemplaza la agenda semanal. RECEPCION y ADMIN pueden editar la de cualquiera; un MEDICO solo la propia (`403` si no corresponde) |
 | GET | `/api/profesionales/{id}/horarios-libres?fecha=aaaa-MM-dd` | todos | Horarios disponibles ese día |
 
 #### `Idempotency-Key` en `POST /api/turnos`
