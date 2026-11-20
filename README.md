@@ -663,9 +663,11 @@ normal de la entrega.
 
 ## 9. Limitaciones conocidas
 
-- La carga de datos de ejemplo corre una sola vez, cuando la base está vacía. Para volver
-  al estado inicial: `TRUNCATE claves_idempotencia, notificaciones, turnos, disponibilidades, profesionales, pacientes RESTART IDENTITY CASCADE;`
-  y redesplegar (o, con Docker, `docker compose down -v`).
+- La carga de datos de ejemplo corre una sola vez, cuando la base está vacía. Las pruebas de
+  punta a punta dejan sus datos (pacientes de prueba, el paciente `<script>alert(1)</script>`
+  de la prueba de XSS, turnos cancelados). **Antes de una demo**, volver al estado inicial con
+  `docker exec -i mediconecta-postgres psql -U mediconecta -d mediconecta < scripts/db/reiniciar-datos-demo.sql`
+  y redesplegar el WAR (con Docker: `docker compose down -v` y volver a levantar).
 - Un turno ocupa un único horario de inicio; no se modela la duración variable de la
   atención ni el solapamiento parcial entre turnos de distinta duración.
 - Marcar un turno como atendido no registra todavía el detalle de la atención (diagnóstico,

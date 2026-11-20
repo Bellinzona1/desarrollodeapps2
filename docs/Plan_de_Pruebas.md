@@ -52,7 +52,10 @@ documentación. También busca dejar evidencia reproducible de cada umbral.
 **Datos de prueba:** juego de datos de `CargaDeDatosDemo` (4 profesionales, 4 pacientes,
 3 turnos, usuarios `paciente`/`recepcion`/`medico`/`admin` con la contraseña de
 `MEDICONECTA_DEMO_CLAVE`). Las pruebas de punta a punta crean sus propios pacientes con
-documentos aleatorios y cancelan los turnos que crean.
+documentos aleatorios y cancelan los turnos que crean, pero esos datos quedan en la base
+(por ejemplo el paciente `<script>alert(1)</script>` de la prueba de XSS, que la interfaz
+muestra como texto). Por eso conviene correrlas sobre Docker Compose o CI, y antes de una
+demo sobre la base local ejecutar `scripts/db/reiniciar-datos-demo.sql` y redesplegar.
 
 ## 5. Cómo ejecutar cada prueba
 
