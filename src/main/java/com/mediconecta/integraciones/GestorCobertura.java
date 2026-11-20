@@ -49,6 +49,9 @@ public class GestorCobertura {
     @Inject
     private CacheCobertura cache;
 
+    @Inject
+    private DisyuntorDeIntegracion disyuntor;
+
     private static final Logger LOG = Logger.getLogger(GestorCobertura.class.getName());
 
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.MEDICO, Roles.ADMIN})
@@ -62,20 +65,30 @@ public class GestorCobertura {
         }
 
         String nombre = obraSocialDe(obraSocial);
-        ValidadorCobertura adaptador = esLegada(nombre) ? adaptadorLegado : adaptadorPartner;
+        boolean legada = esLegada(nombre);
+        ValidadorCobertura adaptador = legada ? adaptadorLegado : adaptadorPartner;
+        String sistema = legada ? DisyuntorDeIntegracion.SOAP_LEGADO : DisyuntorDeIntegracion.REST_PARTNER;
         String clave = nombre + "|" + paciente.getDocumento();
+        if (!disyuntor.permiteLlamar(sistema)) {
+            // Circuit breaker abierto: el sistema viene fallando, no se espera otro timeout.
+            return respaldo(clave, new IntegracionExternaException(
+                    "Circuito " + sistema + " abierto: no se llama al sistema externo."));
+        }
         try {
             ResultadoCobertura resultado = adaptador.validar(nombre, paciente.getDocumento());
+            disyuntor.registrarExito(sistema);
             cache.guardar(clave, resultado);
             return resultado;
         } catch (IntegracionExternaException falla) {
+            disyuntor.registrarFalla(sistema);
             return respaldo(clave, falla);
         }
     }
 
     /**
-     * <b>Fallback.</b> Si el sistema externo falla o no responde dentro de los 5
-     * segundos de timeout, la pantalla no se rompe: se devuelve el ultimo
+     * <b>Fallback.</b> Si el sistema externo falla, no responde dentro de los 5
+     * segundos de timeout o su circuito esta abierto ({@link DisyuntorDeIntegracion}),
+     * la pantalla no se rompe: se devuelve el ultimo
      * resultado bueno de las ultimas 24 h, marcado como de contingencia, o, si
      * no hay, un resultado "a verificar" para que recepcion lo confirme en la
      * atencion. La reserva de turnos no depende de esta consulta.

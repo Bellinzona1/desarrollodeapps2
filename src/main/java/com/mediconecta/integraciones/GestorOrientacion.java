@@ -61,6 +61,9 @@ public class GestorOrientacion {
     @Inject
     private OrientadorEspecialidad orientador;
 
+    @Inject
+    private DisyuntorDeIntegracion disyuntor;
+
     @RolesAllowed({Roles.PACIENTE, Roles.RECEPCION, Roles.ADMIN})
     public SugerenciaEspecialidad sugerirEspecialidad(List<MensajeChat> conversacion) {
         validar(conversacion);
@@ -77,11 +80,18 @@ public class GestorOrientacion {
         });
 
         SugerenciaEspecialidad sugerencia;
-        try {
-            sugerencia = orientador.orientar(conversacion, especialidades);
-        } catch (IntegracionExternaException falla) {
-            LOG.warning("[IA] " + falla.getMessage() + " Se usa la orientacion de respaldo.");
+        if (!disyuntor.permiteLlamar(DisyuntorDeIntegracion.IA)) {
+            // Circuit breaker abierto: la IA viene fallando, se responde ya con el respaldo.
             sugerencia = OrientacionDeRespaldo.orientar(conversacion, especialidades);
+        } else {
+            try {
+                sugerencia = orientador.orientar(conversacion, especialidades);
+                disyuntor.registrarExito(DisyuntorDeIntegracion.IA);
+            } catch (IntegracionExternaException falla) {
+                disyuntor.registrarFalla(DisyuntorDeIntegracion.IA);
+                LOG.warning("[IA] " + falla.getMessage() + " Se usa la orientacion de respaldo.");
+                sugerencia = OrientacionDeRespaldo.orientar(conversacion, especialidades);
+            }
         }
         sugerencia.setEspecialidad(especialidadDeLaLista(sugerencia.getEspecialidad(), especialidades));
         return sugerencia;

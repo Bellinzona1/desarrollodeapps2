@@ -67,9 +67,15 @@ class FallbacksTest {
     /** Respuesta que dan los adaptadores falsos; null = fallan por timeout. */
     private ResultadoCobertura respuestaExterna;
 
+    /** Cuantas veces se llamo de verdad al sistema externo. */
+    private int llamadasExternas;
+
+    private final DisyuntorDeIntegracionTest.RelojManual reloj = new DisyuntorDeIntegracionTest.RelojManual();
+
     private final class AdaptadorFalso extends AdaptadorObraSocialPartner {
         @Override
         public ResultadoCobertura validar(String obraSocial, String numeroAfiliado) {
+            llamadasExternas++;
             if (respuestaExterna == null) {
                 throw new IntegracionExternaException("El partner de obras sociales no respondio a tiempo.",
                         new SocketTimeoutException("Read timed out"));
@@ -92,6 +98,7 @@ class FallbacksTest {
         campo(gestorCobertura, "gestionPacientes", gestionPacientes);
         campo(gestorCobertura, "adaptadorPartner", new AdaptadorFalso());
         campo(gestorCobertura, "cache", new CacheCobertura());
+        campo(gestorCobertura, "disyuntor", DisyuntorDeIntegracionTest.conReloj(reloj));
     }
 
     @Test
@@ -118,6 +125,37 @@ class FallbacksTest {
         assertEquals("SMG20", respaldo.getPlan());
     }
 
+    @Test
+    void conElCircuitoAbiertoNoSeEsperaOtroTimeoutYSeRespondeConElRespaldo() {
+        respuestaExterna = null;
+        for (int i = 0; i < DisyuntorDeIntegracion.FALLAS_PARA_ABRIR; i++) {
+            assertTrue(gestorCobertura.validarCobertura("28999888").isContingencia());
+        }
+        assertEquals(DisyuntorDeIntegracion.FALLAS_PARA_ABRIR, llamadasExternas);
+
+        ResultadoCobertura conCircuitoAbierto = gestorCobertura.validarCobertura("28999888");
+        assertTrue(conCircuitoAbierto.isContingencia());
+        assertTrue(conCircuitoAbierto.getMensaje().contains("no esta disponible"));
+        assertEquals(DisyuntorDeIntegracion.FALLAS_PARA_ABRIR, llamadasExternas, "con el circuito abierto no se llama");
+    }
+
+    @Test
+    void cuandoElSistemaVuelveElPedidoDePruebaCierraElCircuito() {
+        respuestaExterna = null;
+        for (int i = 0; i < DisyuntorDeIntegracion.FALLAS_PARA_ABRIR; i++) {
+            gestorCobertura.validarCobertura("28999888");
+        }
+        respuestaExterna = new ResultadoCobertura(true, "SMG20", 3500, "PARTNER");
+        assertTrue(gestorCobertura.validarCobertura("28999888").isContingencia(), "sigue abierto durante la espera");
+
+        reloj.avanzar(DisyuntorDeIntegracion.ESPERA_ABIERTO);
+        ResultadoCobertura prueba = gestorCobertura.validarCobertura("28999888");
+        assertFalse(prueba.isContingencia());
+        assertEquals("SMG20", prueba.getPlan());
+        assertFalse(gestorCobertura.validarCobertura("28999888").isContingencia());
+        assertEquals(DisyuntorDeIntegracion.FALLAS_PARA_ABRIR + 2, llamadasExternas);
+    }
+
     // --------------------------------------------------------- gateway de IA --
 
     private GestorOrientacion gateway(OrientadorEspecialidad orientador) {
@@ -130,6 +168,7 @@ class FallbacksTest {
         campo(gestor, "orientador", orientador);
         campo(gestor, "contexto", comoRecepcion());
         campo(gestor, "limitador", new LimitadorDeFrecuencia());
+        campo(gestor, "disyuntor", new DisyuntorDeIntegracion());
         return gestor;
     }
 
@@ -142,6 +181,19 @@ class FallbacksTest {
         SugerenciaEspecialidad sugerencia = gestor.sugerirEspecialidad(dice("Me cai y me duele mucho la rodilla"));
         assertTrue(sugerencia.isContingencia());
         assertEquals("Traumatologia", sugerencia.getEspecialidad());
+    }
+
+    @Test
+    void conElCircuitoDeLaIaAbiertoNoSeLlamaAlProveedor() {
+        int[] llamadas = {0};
+        GestorOrientacion gestor = gateway((conversacion, especialidades) -> {
+            llamadas[0]++;
+            throw new IntegracionExternaException("El asistente de IA no respondio.", new SocketTimeoutException());
+        });
+        for (int i = 0; i < DisyuntorDeIntegracion.FALLAS_PARA_ABRIR + 2; i++) {
+            assertTrue(gestor.sugerirEspecialidad(dice("Me duele la rodilla")).isContingencia());
+        }
+        assertEquals(DisyuntorDeIntegracion.FALLAS_PARA_ABRIR, llamadas[0]);
     }
 
     @Test
