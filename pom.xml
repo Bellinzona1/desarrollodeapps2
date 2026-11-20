@@ -25,6 +25,10 @@
         <version.jacoco>0.8.14</version.jacoco>
         <version.checkstyle>10.26.1</version.checkstyle>
         <version.flyway>11.20.3</version.flyway>
+        <!-- Solo para los tests de integracion (*IT): PostgreSQL real en Docker. -->
+        <version.testcontainers>1.21.4</version.testcontainers>
+        <!-- La misma version de Hibernate que trae WildFly 36. -->
+        <version.hibernate>6.6.7.Final</version.hibernate>
         <version.driver.postgresql>42.7.4</version.driver.postgresql>
 
         <!-- Base de desarrollo por omision para "mvn flyway:migrate". La
@@ -74,6 +78,48 @@
             <groupId>org.eclipse.parsson</groupId>
             <artifactId>parsson</artifactId>
             <version>1.1.7</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ===== Solo para los tests de integracion (*IT, maven-failsafe) =====
+             Levantan un PostgreSQL 16 real con Testcontainers, le aplican las
+             migraciones con Flyway y prueban los repositorios JPA con
+             Hibernate. Todo con scope "test": nada de esto entra al WAR (en el
+             servidor, Hibernate y el driver los aporta WildFly). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${version.testcontainers}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${version.testcontainers}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <version>${version.hibernate}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${version.flyway}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <version>${version.flyway}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -157,6 +203,23 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+            </plugin>
+
+            <!-- Tests de integracion (*IT) en "mvn verify": PostgreSQL real con
+                 Testcontainers. Si la maquina no tiene Docker se saltean solos
+                 (@Testcontainers(disabledWithoutDocker = true)); en el CI corren. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- ===== Linter: Checkstyle =====
@@ -298,6 +361,9 @@
                     <targetTests>
                         <param>com.mediconecta.*</param>
                     </targetTests>
+                    <excludedTestClasses>
+                        <param>com.mediconecta.*IT</param>
+                    </excludedTestClasses>
                     <excludedClasses>
                         <param>com.mediconecta.negocio.CargaDeDatosDemo</param>
                         <param>com.mediconecta.negocio.LimpiezaIdempotencia</param>

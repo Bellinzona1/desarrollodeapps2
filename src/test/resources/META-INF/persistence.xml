@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Unidad de persistencia SOLO para los tests de integracion (*IT).
+
+    Mismas entidades que mediconectaPU, pero RESOURCE_LOCAL (el test abre y
+    cierra las transacciones) y sin datasource JNDI: la URL, el usuario y la
+    contrasena los pasa el test con los del PostgreSQL de Testcontainers.
+    Igual que en el servidor, Hibernate solo VALIDA el esquema que dejaron las
+    migraciones de db/migraciones.
+-->
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence
+                                 https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
+
+    <persistence-unit name="mediconecta-integracion" transaction-type="RESOURCE_LOCAL">
+
+        <class>com.mediconecta.modelo.Paciente</class>
+        <class>com.mediconecta.modelo.Profesional</class>
+        <class>com.mediconecta.modelo.Disponibilidad</class>
+        <class>com.mediconecta.modelo.Turno</class>
+        <class>com.mediconecta.modelo.Usuario</class>
+        <class>com.mediconecta.modelo.ClaveIdempotencia</class>
+        <class>com.mediconecta.modelo.Notificacion</class>
+        <class>com.mediconecta.modelo.MensajeFallido</class>
+
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+        <properties>
+            <property name="hibernate.hbm2ddl.auto" value="validate"/>
+            <property name="jakarta.persistence.query.timeout" value="5000"/>
+            <property name="hibernate.show_sql" value="false"/>
+        </properties>
+    </persistence-unit>
+</persistence>
