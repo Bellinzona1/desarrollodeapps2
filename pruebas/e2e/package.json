@@ -1,0 +1,12 @@
+{
+  "name": "mediconecta-e2e",
+  "private": true,
+  "description": "Pruebas de punta a punta de la interfaz de MediConecta (Playwright)",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

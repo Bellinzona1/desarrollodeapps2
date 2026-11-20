@@ -41,3 +41,8 @@ Desktop.ini
 
 # ---- Secretos locales (Docker Compose) ----
 .env
+
+# ---- Pruebas E2E (Playwright) ----
+pruebas/e2e/node_modules/
+pruebas/e2e/informe/
+pruebas/e2e/test-results/

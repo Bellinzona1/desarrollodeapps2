@@ -204,7 +204,13 @@ jobs:
       - name: Prueba de humo (seguridad en vivo, ETag, idempotencia, JMS, DLQ, IA)
         run: ./scripts/smoke-test.sh http://localhost:8080/mediconecta
 
-      - name: Prueba de carga k6 (p95 < 500 ms, errores < 1 %)
+      - name: Pruebas E2E de la interfaz (Playwright, Chromium)
+        run: |
+          docker run --rm --network host --ipc=host -v "$PWD/pruebas/e2e:/e2e" -w /e2e \
+            -e CI=true -e BASE_URL=http://localhost:8080/mediconecta -e MEDICONECTA_DEMO_CLAVE \
+            mcr.microsoft.com/playwright:v1.49.1-noble sh -c "npm ci --no-audit --no-fund && npx playwright test"
+
+      - name: Prueba de carga k6 (50 usuarios x 5 min, p95 < 500 ms, errores < 1 %)
         run: |
           docker run --rm -i --network host -e BASE_URL=http://localhost:8080/mediconecta -e CLAVE="$MEDICONECTA_DEMO_CLAVE" \
             grafana/k6:0.54.0 run --summary-trend-stats="avg,med,p(90),p(95),max" - < pruebas/carga/carga.js | tee k6.txt
@@ -225,10 +231,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: carga-y-zap
+          name: carga-e2e-y-zap
           path: |
             k6.txt
             zap/
+            pruebas/e2e/informe/
           if-no-files-found: ignore
 
       - name: Logs de los contenedores
@@ -238,3 +245,81 @@ jobs:
       - name: Apagar
         if: always()
         run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Analisis de dependencias (SCA): vulnerabilidades conocidas (CVE) en las
+  # dependencias de Maven y npm del repositorio, y en la imagen Docker.
+  # ---------------------------------------------------------------------------
+  dependencias:
+    name: Dependencias con vulnerabilidades (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy sobre el repositorio (corta ante HIGH o CRITICAL con arreglo)
+        run: |
+          docker run --rm -v "$PWD:/src:ro" aquasec/trivy:0.58.1 fs --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress /src | tee trivy-repo.txt
+
+      - name: Trivy sobre la imagen Docker (informe)
+        run: |
+          docker build -q -t mediconecta:sca .
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image \
+            --severity HIGH,CRITICAL --ignore-unfixed --no-progress mediconecta:sca | tee trivy-imagen.txt
+          { echo "### Trivy (imagen)"; echo '```'; grep -E '^Total|^mediconecta|^opt/' trivy-imagen.txt | head -20; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Informes de Trivy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy
+          path: trivy-*.txt
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # OWASP ZAP activo y autenticado contra la API: ataca cada operacion del
+  # contrato OpenAPI (inyecciones, path traversal, XSS reflejado...) con un JWT
+  # de recepcion. Corta si encuentra alguna alerta High.
+  # ---------------------------------------------------------------------------
+  zap-activo:
+    name: OWASP ZAP activo y autenticado (API)
+    runs-on: ubuntu-latest
+    needs: [calidad, migraciones]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secretos y entorno
+        run: |
+          {
+            echo "MEDICONECTA_DB_CLAVE=$(openssl rand -hex 24)"
+            echo "MEDICONECTA_JWT_SECRETO=$(openssl rand -base64 48 | tr -d '\n')"
+            echo "MEDICONECTA_DEMO_CLAVE=$(openssl rand -hex 12)"
+          } > .env
+          grep MEDICONECTA_DEMO_CLAVE .env >> "$GITHUB_ENV"
+          docker compose up -d --build
+          for i in $(seq 1 60); do curl -fsS http://localhost:8080/mediconecta/api/salud && exit 0; sleep 5; done
+          exit 1
+
+      - name: ZAP API scan con JWT de recepcion
+        run: |
+          TOKEN=$(curl -s -X POST http://localhost:8080/mediconecta/api/auth/login -H 'Content-Type: application/json' \
+            -d "{\"usuario\":\"recepcion\",\"clave\":\"$MEDICONECTA_DEMO_CLAVE\"}" | jq -r .token)
+          test -n "$TOKEN" && test "$TOKEN" != null
+          mkdir -p zap && chmod 777 zap
+          # ZAP_AUTH_HEADER_VALUE: los scans empaquetados de ZAP agregan esa cabecera
+          # (Authorization por omision) a cada pedido.
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" -e ZAP_AUTH_HEADER_VALUE="Bearer $TOKEN" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py -t http://localhost:8080/mediconecta/openapi.json -f openapi -J zap-api.json -r zap-api.html -I
+          altas=$(jq '[.site[].alerts[] | select(.riskcode=="3")] | length' zap/zap-api.json)
+          medias=$(jq '[.site[].alerts[] | select(.riskcode=="2")] | length' zap/zap-api.json)
+          echo "### OWASP ZAP activo (API, autenticado): $altas alertas High, $medias Medium" >> "$GITHUB_STEP_SUMMARY"
+          test "$altas" -eq 0
+
+      - name: Informe de ZAP activo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-activo
+          path: zap/
+          if-no-files-found: ignore
