@@ -4,10 +4,11 @@
 //
 //  Simula a recepcion y pacientes usando la aplicacion a la vez: agenda, padron,
 //  profesionales, horarios libres, fichas y salud. Criterio de aceptacion de
-//  los Criterios de Testing: p95 < 500 ms y menos de 1 % de errores.
+//  los Criterios de Testing: 50 usuarios durante 5 minutos, p95 < 500 ms y
+//  menos de 1 % de errores.
 //
 //      docker run --rm -i --network host -e BASE_URL=http://localhost:8080/mediconecta \
-//          -e CLAVE=Demo.2026 grafana/k6:0.54.0 run - < pruebas/carga/carga.js
+//          -e CLAVE="$MEDICONECTA_DEMO_CLAVE" grafana/k6:0.54.0 run - < pruebas/carga/carga.js
 //
 //  (en macOS con Docker Desktop: BASE_URL=http://host.docker.internal:8080/mediconecta
 //   y sin --network host)
@@ -20,17 +21,25 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
 const BASE = __ENV.BASE_URL || 'http://localhost:8080/mediconecta';
-const CLAVE = __ENV.CLAVE || 'Demo.2026';
+const USUARIOS = Number(__ENV.USUARIOS || 50);
+const DURACION = __ENV.DURACION || '5m';
+const CLAVE = __ENV.CLAVE;
+if (!CLAVE) {
+    throw new Error('Defini CLAVE (-e CLAVE=...) con la contrasena de los usuarios de demo');
+}
 
 export const options = {
     scenarios: {
+        // Criterio de los Criterios de Testing: 50 usuarios simultaneos durante
+        // 5 minutos. Para una corrida rapida en la maquina local:
+        //   -e USUARIOS=10 -e DURACION=30s
         uso_normal: {
             executor: 'ramping-vus',
             startVUs: 1,
             stages: [
-                { duration: '10s', target: 20 },
-                { duration: '30s', target: 20 },
-                { duration: '5s', target: 0 },
+                { duration: '30s', target: USUARIOS },
+                { duration: DURACION, target: USUARIOS },
+                { duration: '10s', target: 0 },
             ],
         },
     },
