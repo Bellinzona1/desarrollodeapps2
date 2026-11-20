@@ -10,7 +10,8 @@
 #    1. db:          PostgreSQL 16 con un volumen persistente;
 #    2. migraciones: Flyway aplica db/migraciones y termina;
 #    3. app:         WildFly 36 con el WAR (arranca recien cuando las
-#                    migraciones terminaron bien).
+#                    migraciones terminaron bien) y un volumen para el
+#                    journal de JMS y el log de transacciones.
 #
 #  La aplicacion queda en http://localhost:${MEDICONECTA_PUERTO:-8080}/mediconecta/
 #  Los secretos salen de .env (que esta en .gitignore): si falta alguno,
@@ -66,9 +67,14 @@ services:
       MEDICONECTA_IA_CLAVE: ${MEDICONECTA_IA_CLAVE:-}
     ports:
       - "${MEDICONECTA_PUERTO:-8080}:8080"
+    # Journal de Artemis y log de transacciones: sobreviven a que el contenedor
+    # se recree, asi un mensaje encolado y sin consumir no se pierde.
+    volumes:
+      - datos-wildfly:/opt/jboss/wildfly/standalone/data
     depends_on:
       migraciones:
         condition: service_completed_successfully
 
 volumes:
   datos-postgres:
+  datos-wildfly:

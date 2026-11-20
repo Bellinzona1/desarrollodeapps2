@@ -44,9 +44,16 @@ RUN $JBOSS_HOME/bin/jboss-cli.sh --command="module add --name=org.postgresql --r
     && $JBOSS_HOME/bin/jboss-cli.sh --file=/tmp/cli/todo.cli \
     && rm -rf /tmp/cli /tmp/postgresql.jar \
        $JBOSS_HOME/standalone/configuration/standalone_xml_history \
-       $JBOSS_HOME/standalone/data $JBOSS_HOME/standalone/log $JBOSS_HOME/standalone/tmp
+       $JBOSS_HOME/standalone/data $JBOSS_HOME/standalone/log $JBOSS_HOME/standalone/tmp \
+    && mkdir -p $JBOSS_HOME/standalone/data
 
 COPY --from=compilacion --chown=jboss:jboss /fuente/target/mediconecta.war $JBOSS_HOME/standalone/deployments/
+
+# standalone/data guarda el journal de Artemis (mensajes JMS persistentes) y el
+# log de transacciones XA. Compose lo monta en un volumen: si el contenedor se
+# recrea (docker compose up --force-recreate, una imagen nueva), los mensajes
+# que estaban en la cola sin consumir siguen ahi y se entregan al volver.
+VOLUME $JBOSS_HOME/standalone/data
 
 EXPOSE 8080
 
