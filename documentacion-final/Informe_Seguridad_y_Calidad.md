@@ -37,5 +37,25 @@
 | Enforcer | Maven ≥ 3.9, JDK ≥ 17, plugins con versión fija |
 | JaCoCo | Negocio 95,0 % líneas / 82,6 % ramas; alcance global del pom 86,7 %; proyecto completo 72,5 % / 69,2 % |
 | PIT | 85 % (338/396) sobre `negocio` y `modelo.estado`; test strength 88 % |
-| SonarCloud Quality Gate | **No ejecutado** (falta `SONAR_TOKEN`, `SONAR_ORGANIZACION`, `SONAR_PROYECTO`) |
+| SonarCloud Quality Gate | **APROBADO para PR #1**, actualización del 20/11/2026: notificación de `sonarqubecloud[bot]`, **Quality Gate passed**. [Evidencia](evidencias/sonar/quality-gate-pr-1.json). En el run #4 histórico no se había ejecutado. |
 | Tests inestables | No medido (falta correr la suite 3 veces seguidas) |
+
+### Evidencia posterior de SonarQube Cloud — PR #1
+
+La captura compartida por el usuario muestra **Quality Gate passed** para
+[Bellinzona1/desarrollodeapps2#1](https://github.com/Bellinzona1/desarrollodeapps2/pull/1),
+con notificación del 20/11/2026 a las 10:49. Se conserva una transcripción de los datos
+en [evidencias/sonar/quality-gate-pr-1.json](evidencias/sonar/quality-gate-pr-1.json).
+
+| Métrica mostrada | Valor |
+|---|---:|
+| Nuevos issues | 2 |
+| Issues aceptados | 0 |
+| Nuevos riesgos de dependencias | 6 |
+| Security hotspots | 0 |
+| Cobertura sobre código nuevo | 0,0 % |
+| Duplicación sobre código nuevo | 0,0 % |
+
+La aprobación corresponde a ese análisis del PR; la captura no identifica el SHA.
+Los hallazgos se conservan en el informe aunque el gate esté aprobado. La cobertura de
+código nuevo mostrada por Sonar no sustituye las métricas de negocio medidas con JaCoCo.

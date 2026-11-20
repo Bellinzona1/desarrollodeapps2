@@ -5,6 +5,10 @@
 **Rama:** `integracion-final` · **Commit de referencia del código:** `eda4b02` ·
 **CI:** run #4, 6 jobs en verde — https://github.com/tobiasbonomo29/desarrollo-de-apps2/actions/runs/44658335940
 
+**Actualización 20/11/2026:** SonarQube Cloud informó **Quality Gate passed** para el
+[PR #1](https://github.com/Bellinzona1/desarrollodeapps2/pull/1).
+La [evidencia transcrita](evidencias/sonar/quality-gate-pr-1.json) conserva el resultado y las métricas de la captura aportada por el usuario.
+
 ## Contenido
 
 | Archivo | Estado |
@@ -40,7 +44,7 @@ Material histórico de `947ba9d`: `docs/historico/entrega3-947ba9d/`.
 | OWASP ZAP baseline | 65 PASS, 0 FAIL, 3 WARN informativas | CI |
 | gitleaks | 0 hallazgos en 36 commits | CI |
 | Migraciones Flyway | V1–V3 aplicadas; segunda corrida sin cambios | CI |
-| Sonar Quality Gate | No ejecutado (falta token) | CI |
+| Sonar Quality Gate | **APROBADO para PR #1** (actualización 20/11/2026) | [Evidencia de la notificación](evidencias/sonar/quality-gate-pr-1.json); análisis externo al CI actual |
 | Pipeline | 4 min 12 s | CI |
 
 ## Regenerar

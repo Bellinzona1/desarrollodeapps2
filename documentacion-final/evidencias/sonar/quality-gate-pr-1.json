@@ -1,0 +1,24 @@
+{
+  "herramienta": "SonarQube Cloud",
+  "proyecto": "Bellinzona1_desarrollodeapps2",
+  "repositorio": "Bellinzona1/desarrollodeapps2",
+  "pull_request": 1,
+  "url_pull_request": "https://github.com/Bellinzona1/desarrollodeapps2/pull/1",
+  "resultado_quality_gate": "PASSED",
+  "texto_observado": "Quality Gate passed",
+  "fecha_notificacion": "2026-11-20",
+  "hora_mostrada": "10:49",
+  "zona_horaria_contexto": "America/Argentina/Buenos_Aires",
+  "emisor": "sonarqubecloud[bot]",
+  "fuente": "Transcripcion de la captura de la notificacion de GitHub aportada por el usuario en esta conversacion.",
+  "metricas_mostradas": {
+    "new_issues": 2,
+    "accepted_issues": 0,
+    "new_dependency_risks": 6,
+    "security_hotspots": 0,
+    "coverage_on_new_code_percent": 0.0,
+    "duplication_on_new_code_percent": 0.0
+  },
+  "alcance": "Resultado del analisis del PR #1. La captura no identifica el SHA analizado ni acredita el resultado del tag o de revisiones posteriores.",
+  "nota": "El gate aprobado no implica ausencia de hallazgos. La cobertura mostrada por Sonar corresponde a codigo nuevo y no sustituye el reporte JaCoCo de las pruebas ejecutadas."
+}

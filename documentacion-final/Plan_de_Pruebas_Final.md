@@ -20,7 +20,7 @@ Estructura basada en ISO/IEC/IEEE 29119-3, según los *Criterios de Testing* (Cl
 | P2 | Contrato de la API | `ContratoOpenApiTest` | build | Build |
 | P3 | Cobertura | JaCoCo (negocio ≥ 80 % / 70 %) | `pom.xml` | Build y CI |
 | P4 | Mutación | PIT (negocio + `modelo.estado`, ≥ 60 %) | `pom.xml` | CI `mutacion` |
-| P5 | Análisis estático | Checkstyle (build) · SonarCloud | `config/checkstyle`, CI `sonar` | Build · CI (**Sonar sin configurar**) |
+| P5 | Análisis estático | Checkstyle (build) · SonarQube Cloud | `config/checkstyle`; análisis externo del PR #1 | Build; **Quality Gate aprobado** el 20/11/2026 ([evidencia](evidencias/sonar/quality-gate-pr-1.json)) |
 | P6 | Migraciones | Flyway sobre PostgreSQL | CI `migraciones` | CI |
 | P7 | Sistema / E2E de API | `scripts/smoke-test.sh` (148 verificaciones) | CI `punta-a-punta` | CI y antes de la demo |
 | P8 | Seguridad | humo “seguridad en vivo” + ZAP baseline + gitleaks | CI | CI |
@@ -56,7 +56,7 @@ Datos: `CargaDeDatosDemo` (4 profesionales, 4 pacientes, 3 turnos; usuarios `pac
 | ZAP | 0 High; Medium justificadas | baseline: 0 FAIL, 3 WARN informativas; sin activo autenticado | ◐ |
 | Secretos | 0 | gitleaks 0 (36 commits) | ✔ |
 | IA | ≥ 80 % | 12/12 documentado el 19/11, sin salida versionada; no reejecutado | ◐ |
-| Quality Gate Sonar | aprobado | no ejecutado | ✗ |
+| Quality Gate Sonar | aprobado | **Aprobado para PR #1**, actualización 20/11/2026 ([evidencia](evidencias/sonar/quality-gate-pr-1.json)) | ✔ (PR #1) |
 | Defectos Bloqueantes/Críticos abiertos | 0 | 0 | ✔ |
 | Pipeline | ≤ 15 min | 4 min 12 s | ✔ |
 | Suite 3 veces sin flaky | idéntica | no ejecutado | ✗ |

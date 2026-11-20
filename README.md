@@ -1,5 +1,8 @@
 # MediConecta
 
+**Quality Gate de SonarQube Cloud: APROBADO** — [PR #1](https://github.com/Bellinzona1/desarrollodeapps2/pull/1), 20/11/2026.
+[Evidencia registrada](documentacion-final/evidencias/sonar/quality-gate-pr-1.json): notificación de `sonarqubecloud[bot]` con resultado **“Quality Gate passed”**.
+
 **Trabajo Práctico Integrador — Desarrollo de Aplicaciones II — UADE**
 **Entrega Obligatoria N.º 2 (2.º parcial)** · con las mejoras pedidas en la corrección del 13/11
 
@@ -651,6 +654,9 @@ u orden manual y contiene únicamente estos tres jobs:
 2. **Mutation testing (PIT)** (`mutacion`): exige al menos 60 % sobre negocio y State;
    publica el informe de mutación.
 3. **Sin secretos en el historial (gitleaks)** (`secretos`): escanea todo el historial.
+
+El Quality Gate de SonarQube Cloud fue aprobado para el **PR #1** (20/11/2026), mediante
+un análisis externo a este workflow; ver la evidencia enlazada al inicio.
 
 Por decisión del equipo, SonarCloud, Trivy, ZAP, E2E, carga y el job independiente de
 migraciones quedan fuera de este pipeline. Los scripts de pruebas y la configuración

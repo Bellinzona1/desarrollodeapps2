@@ -45,7 +45,7 @@
 | RNF-13 | Sin secretos (G6) | gitleaks 0 | ✔ (riesgo residual D-03) |
 | RNF-14 | Cobertura negocio 80/70 | 95,0 % / 82,6 % | ✔ |
 | RNF-15 | Mutación ≥ 60 % | 85 % | ✔ |
-| RNF-16 | Quality Gate Sonar | No ejecutado | ✗ |
+| RNF-16 | Quality Gate Sonar | **Aprobado para PR #1**, 20/11/2026. [Notificación registrada](evidencias/sonar/quality-gate-pr-1.json) | ✔ (PR #1) |
 | RNF-17 | Carga p95 < 500 ms (50 usuarios × 5 min) | 22,18 ms con 20 usuarios × 45 s | ◐ |
 | RNF-18 | BOLA/IDOR 403 | Humo seguridad en vivo | ✔ |
 | RNF-19 | BFLA 403 | Humo | ✔ |

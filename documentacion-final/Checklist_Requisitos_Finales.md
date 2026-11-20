@@ -1,5 +1,10 @@
 # MediConecta — Auditoría de criterios de testing (Clase 15)
 
+**Actualización de Sonar (20/11/2026): Quality Gate APROBADO para el [PR #1](https://github.com/Bellinzona1/desarrollodeapps2/pull/1).**
+Evidencia: notificación de `sonarqubecloud[bot]` aportada por el usuario, transcrita en
+[`quality-gate-pr-1.json`](evidencias/sonar/quality-gate-pr-1.json). Este resultado procede
+de SonarQube Cloud y es independiente de los tres jobs conservados en GitHub Actions.
+
 **Revisión:** 20/11/2026. **Base inspeccionada:** `0ae0371` más los cambios locales de esta auditoría.
 **Fuente:** `Criterios_Testing_TPO_Clase15.pdf`, 5 páginas, aportado por el usuario.
 El PDF se usa como rúbrica: no autoriza publicar en Teams/Jira, firmar por integrantes,
@@ -46,7 +51,7 @@ Estados: **CUMPLE** = evidencia comprobada; **PARCIAL** = implementación/eviden
 | Matriz HU → criterio → caso → test → resultado → evidencia → defecto | NO CUMPLE | La matriz actual usa RF/CU y no desglosa los criterios de las 12 HU existentes en `docs/Historias_de_Usuario.md`. |
 | Casos con ID, precondición, datos, pasos, esperado, prioridad, tipo, automatización | NO CUMPLE | El plan reconoce que falta la especificación caso por caso. Los nombres de tests y el script de humo no cubren todos esos campos. |
 | ≥ 40 % de casos negativos o de borde | NO VERIFICABLE | No existe inventario clasificado completo. El 38,5 % histórico de expectativas 4xx no demuestra el mínimo y no puede sumarse a unitarias sin denominador común. |
-| Informe de ejecución por nivel, tiempos, cobertura, mutación, carga y captura de Quality Gate | PARCIAL | Hay evidencias históricas y una ejecución nueva de Maven. Faltan resultados actuales de los demás niveles y Quality Gate. |
+| Informe de ejecución por nivel, tiempos, cobertura, mutación, carga y captura de Quality Gate | PARCIAL | Hay evidencias históricas y una ejecución nueva de Maven. Quality Gate del PR #1 aprobado según la notificación aportada; faltan resultados actuales de los demás niveles. |
 | Registro de defectos con Jira, severidad/prioridad, reproducción, evidencia y causa raíz | PARCIAL | D-01…D-10 tienen detalle, pero faltan Jira y responsables. Las brechas de esta auditoría deben incorporarse al seguimiento. |
 | Informe SEC con estados y evidencia de ZAP, SCA y secretos | PARCIAL | `Informe_Seguridad_y_Calidad.md` está referido al run anterior; necesita resultados del CI actual y tratamiento de hallazgos. |
 | Tres defectos tardíos y qué prueba los habría detectado | PARCIAL | D-09/D-10 y errores de IA se describen; falta presentar tres lecciones con detección tardía y prevención explícitas. |
@@ -63,7 +68,7 @@ Estados: **CUMPLE** = evidencia comprobada; **PARCIAL** = implementación/eviden
 |---|---|---|
 | Líneas negocio/dominio ≥ 80 %; ramas ≥ 70 % | CUMPLE | Build limpio ejecutado: negocio 720/758 = 94,99 % líneas, 276/334 = 82,63 % ramas; `modelo` 82,14 % / 75 %; `modelo.estado` 95,35 % / 75 %. |
 | Mutación dominio ≥ 60 % | PARCIAL | PIT configurado para negocio y State; evidencia histórica 338/396 (85 %). Reejecutar sobre el release. |
-| Quality Gate aprobado; 0 Blocker/Critical, 0 vulnerabilidades, duplicación ≤ 3 %, ratings A, hotspots 100 % | NO VERIFICABLE | No hay análisis ejecutado actual. Ahora CI exige `SONAR_TOKEN`, `SONAR_ORGANIZACION`, `SONAR_PROYECTO`; verificar también que el gate de Sonar tenga esos umbrales. |
+| Quality Gate de Sonar aprobado | CUMPLE para PR #1 | **Quality Gate passed**, notificación de `sonarqubecloud[bot]` del 20/11/2026. [Evidencia](evidencias/sonar/quality-gate-pr-1.json). La captura no acredita la configuración de todos los umbrales particulares de la rúbrica ni el análisis del tag. |
 | Integración con base y broker reales | PARCIAL | Se ejecutaron los 6 tests PostgreSQL/Testcontainers. El humo usa JMS real en Compose; esta auditoría no reejecutó los consumidores ni la caída del broker. |
 | Colección API versionada en CI, éxito y error de cada endpoint | PARCIAL | Humo bash amplio, pero no hay matriz de cobertura de las operaciones con ambos casos ni colección Postman/REST Assured/Karate equivalente a la solicitada. |
 | Respuestas validadas contra OpenAPI y WSDL | NO CUMPLE | `ContratoOpenApiTest` compara rutas/metadatos. El humo comprueba publicación del WSDL y textos de SOAP; no valida respuestas contra sus esquemas. |
@@ -116,7 +121,7 @@ Estados: **CUMPLE** = evidencia comprobada; **PARCIAL** = implementación/eviden
 | 0 bloqueantes/críticos, ≤ 3 mayores con workaround; menores registrados | NO VERIFICABLE | No alcanza con el contador histórico de defectos: registrar brechas actuales, severidad y responsables, y validar las HU Must. |
 | QA conduce; cualquier integrante explica tests/defectos/herramientas | NO VERIFICABLE | Requiere ensayo con el equipo. No se puede acreditar desde el repositorio. |
 
-## 7. Cambios de esta auditoría y siguientes pasos
+## 7. Cambios de la auditoría inicial (histórico; alcance actualizado arriba)
 
 - CI exige Sonar configurado; ya no puede quedar verde porque omitió el análisis.
 - CI ejecuta JUnit/IT tres veces desde `clean`, conserva XML y compara el inventario; rechaza omisiones, fallas y errores.
