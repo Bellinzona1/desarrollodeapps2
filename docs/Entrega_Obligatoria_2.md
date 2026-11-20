@@ -385,7 +385,7 @@ de un flujo completo que conecte los componentes involucrados" de la consigna.
   sigue pendiente lo que ya se detalla en `docs/trello-actualizaciones.md`.
 - **Feedback del diseño.** Ver §9.6.
 - **Casos de uso y manual de usuario**, cubiertos en documentos separados:
-  [`docs/casos-de-uso.md`](casos-de-uso.md) y [`docs/manual-usuario.md`](manual-usuario.md).
+  [`docs/casos-de-uso.md`](casos-de-uso.md) y [`docs/Manual_de_Usuario.md`](Manual_de_Usuario.md).
 
 ---
 

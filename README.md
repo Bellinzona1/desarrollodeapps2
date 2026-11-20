@@ -25,9 +25,11 @@ GitHub Actions**, **health check** real y **migraciones Flyway**; **cobertura co
 | **Health check** | <http://localhost:8080/mediconecta/api/salud> |
 | **API (OpenAPI 3.1)** | <http://localhost:8080/mediconecta/api-docs.html> · contrato en [`openapi.json`](src/main/webapp/openapi.json) |
 | **Mejoras tras la corrección** | [docs/Mejoras_Correccion_Entrega_2.md](docs/Mejoras_Correccion_Entrega_2.md) |
-| **Pruebas** | [Plan de pruebas](docs/Plan_de_Pruebas.md) · [Matriz de trazabilidad](docs/Matriz_de_Trazabilidad.md) · [Informe de estado](docs/Informe_de_Estado.md) |
+| **Entrega final** | [documentacion-final/](documentacion-final/README.md): checklist, plan de pruebas, matriz de trazabilidad, registro de defectos, informes y declaración de IA |
+| **Requisitos** | [BRD](docs/BRD.md) · [Historias de usuario (Gherkin, MoSCoW)](docs/Historias_de_Usuario.md) · [Casos de uso](docs/casos-de-uso.md) |
+| **Decisiones** | [ADR-0001 a ADR-0010](docs/adr/README.md) |
 | **Usuarios finales** | [Manual de usuario](docs/Manual_de_Usuario.md) |
-| **Uso de IA** | [Declaración de uso de IA](docs/Declaracion_Uso_IA.md) |
+| **Uso de IA** | [Declaración de uso de IA](documentacion-final/Declaracion_Uso_IA_Final.md) |
 | **Documento de la entrega** | [docs/Entrega_Obligatoria_2.md](docs/Entrega_Obligatoria_2.md) (cierre del 13/11 en §9) · [Entrega 1](docs/Entrega_Obligatoria_1.md) |
 | **Arquitectura y patrones** | [docs/arquitectura.md](docs/arquitectura.md) |
 | **Guion de la defensa** | [docs/guion-defensa.md](docs/guion-defensa.md) |
@@ -517,7 +519,7 @@ mediconecta/
 │   ├── guion-defensa.md                      recorrido de la demo, paso a paso
 │   └── preguntas-defensa.md                  preguntas probables y respuestas cortas
 ├── scripts/
-│   ├── smoke-test.sh                         123 pruebas de punta a punta (Linux/macOS, CI)
+│   ├── smoke-test.sh                         151 pruebas de punta a punta (Linux/macOS, CI)
 │   ├── smoke-test.ps1                        version PowerShell (Windows)
 │   ├── ci/resumen-cobertura.py               tabla de cobertura para GitHub Actions
 │   ├── db/
@@ -555,7 +557,8 @@ mediconecta/
         ├── js/                               modulos ES: api, ui, layout y uno por pantalla
         ├── app/                              pantallas
         └── WEB-INF/web.xml · jboss-web.xml · beans.xml · undertow-handlers.conf (SameSite)
-src/test/java/                                171 tests unitarios JUnit 5
+src/test/java/                                207 tests unitarios JUnit 5 y 6 de integracion (*IT, Testcontainers)
+pruebas/e2e/                                  11 pruebas E2E de la interfaz (Playwright)
 ```
 
 ---
@@ -566,7 +569,7 @@ src/test/java/                                171 tests unitarios JUnit 5
 
 ```powershell
 ./mvnw verify                                             # igual que mvn verify, con Maven 3.9.9 fijado
-mvn verify                                                # enforcer + linter + 194 tests + cobertura minima
+mvn verify                                                # enforcer + linter + 207 tests + 6 IT (PostgreSQL real) + cobertura
 mvn test-compile org.pitest:pitest-maven:mutationCoverage # mutation testing (PIT, minimo 60 %)
 mvn test                                                  # solo linter + tests (informe en target/site/jacoco/)
 mvn test -Dtest=FachadaReservasTest                       # una clase
@@ -583,8 +586,16 @@ mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
   simulados, productor JMS) quedan fuera del mínimo y las cubre la prueba de punta a punta.
 - Los EJB se prueban como objetos comunes con los repositorios en memoria; los MDB, con
   mensajes JMS simulados. Hay un test que compara `openapi.json` con los recursos reales.
+- **Integración con contenedor (Testcontainers):** `PersistenciaPostgresIT` levanta un
+  PostgreSQL 16 en Docker, aplica las migraciones con Flyway, arranca Hibernate 6.6.7 (el de
+  WildFly 36) con `validate` y prueba los repositorios JPA, `@Version` (conflicto
+  concurrente) y las restricciones UNIQUE de avisos e idempotencia. Corre en `mvn verify`
+  (maven-failsafe); sin Docker se saltea.
+- **E2E de interfaz (Playwright):** `pruebas/e2e` maneja Chromium contra la app desplegada:
+  login, menú por rol, reserva completa con el asistente, cancelación, XSS en pantalla,
+  cabeceras y responsive (360/768/1280 px). Corre en el CI después de la prueba de humo.
 - **Capa de negocio:** el build exige además 80 % de líneas y 70 % de ramas en
-  `negocio` (hoy 95,0 % y 82,5 %). **Mutation testing (PIT):** 85 % de mutantes
+  `negocio` (hoy 95,0 % y 82,6 %). **Mutation testing (PIT):** 85 % de mutantes
   detectados (mínimo 60 %).
 - **Build reproducible:** `./mvnw` usa siempre Maven 3.9.9 y el enforcer exige JDK ≥ 17 y
   versión fija en todos los plugins.
@@ -593,12 +604,15 @@ mvn test -Dtest=GestionTurnosTest#cancelarLiberaElHorario # un test
 
 | Prueba | Comando | Último resultado (19/11/2026) |
 |---|---|---|
-| Carga (k6, p95 < 500 ms) | `docker run --rm -i --network host -e BASE_URL=... grafana/k6:0.54.0 run - < pruebas/carga/carga.js` | p95 35,6 ms, 0 % errores, ~200 req/s |
-| OWASP ZAP baseline | ver [plan de pruebas](docs/Plan_de_Pruebas.md) §5 | 0 High, 0 Medium, 0 Low |
+| Carga (k6, 50 usuarios × 5 min, p95 < 500 ms) | `docker run --rm -i --network host -e BASE_URL=... -e CLAVE=... grafana/k6:0.54.0 run - < pruebas/carga/carga.js` | p95 20,95 ms, 0 errores en 189.976 pedidos, 632 req/s (20/11) |
+| OWASP ZAP baseline | job `punta-a-punta` del CI | 0 High, 0 Medium, 0 Low |
+| OWASP ZAP activo y autenticado (API) | job `zap-activo` del CI | corta ante alertas High |
+| XXE y bomba de entidades (SOAP) | `scripts/smoke-test.sh`, sección cobertura | rechazadas con SOAP Fault |
+| Dependencias (SCA, Trivy) | job `dependencias` del CI | 0 HIGH/CRITICAL con arreglo |
 | Secretos en el historial | `docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 git /repo` | 0 hallazgos |
 | IA (12 casos) | `pruebas/ia/evaluar-ia.sh http://localhost:8080/mediconecta` | 12/12 |
 
-El [plan de pruebas](docs/Plan_de_Pruebas.md) §6 tiene el guion para demostrar en vivo el
+El [plan de pruebas](documentacion-final/Plan_de_Pruebas_Final.md) tiene el guion para demostrar en vivo el
 timeout con fallback, el broker caído sin pérdida de mensajes, la DLQ, `Idempotency-Key` y
 ETag.
 
@@ -619,11 +633,11 @@ pasada, superposición, ownership, 409 del patrón State), `Idempotency-Key`, co
 SOAP/REST, los cuatro pasos del asistente stateful, los avisos de los tres consumidores JMS,
 el pase de un mensaje defectuoso a la DLQ, **seguridad en vivo** (BOLA/IDOR, BFLA, JWT
 `alg:none`/firma ajena/mal formado, inyección SQL y XSS, 429 ante fuerza bruta), **ETag**
-(304 y 412) y el **gateway de IA** (orientación, emergencia, fallback). Devuelve 0 si todas
-pasan. La versión PowerShell cubre un subconjunto.
+(304 y 412), **XXE** contra el SOAP y el **gateway de IA** (orientación, emergencia,
+fallback). Devuelve 0 si todas pasan. La versión PowerShell cubre un subconjunto. La clave
+de los usuarios de demo se pasa en `MEDICONECTA_DEMO_CLAVE` (no hay valor por omisión).
 
-Última ejecución de `smoke-test.sh` (19/11/2026): **148 pruebas OK, 0 fallidas** sobre
-WildFly 36.0.1.Final local (`standalone-full.xml`, JDK 17, PostgreSQL 16).
+Son **151 pruebas**; las corre el CI en cada push contra Docker Compose.
 
 ### Integración continua (GitHub Actions)
 
@@ -638,8 +652,13 @@ WildFly 36.0.1.Final local (`standalone-full.xml`, JDK 17, PostgreSQL 16).
 5. **migraciones**: aplica `db/migraciones` sobre un PostgreSQL vacío y las vuelve a
    correr para comprobar que no rompen nada.
 6. **punta-a-punta**: `docker compose up --build`, espera al health check, corre
-   `scripts/smoke-test.sh`, la prueba de carga k6 (p95 < 500 ms) y el escaneo OWASP ZAP
-   (falla con alertas High). Si falla, vuelca los logs de los contenedores.
+   `scripts/smoke-test.sh`, las pruebas E2E de interfaz (Playwright), la prueba de carga
+   k6 (50 usuarios × 5 min, p95 < 500 ms) y el escaneo OWASP ZAP baseline (falla con
+   alertas High). Si falla, vuelca los logs de los contenedores.
+7. **dependencias**: Trivy sobre `pom.xml` y `package-lock.json` (falla con HIGH/CRITICAL
+   que tengan arreglo) y sobre la imagen Docker (informe).
+8. **zap-activo**: ZAP API scan activo, autenticado con un JWT, sobre todas las operaciones
+   de `openapi.json` (falla con alertas High).
 
 ---
 

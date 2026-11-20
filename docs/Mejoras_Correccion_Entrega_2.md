@@ -115,10 +115,10 @@ Lo pedido para el checkpoint, además de lo anterior:
 | Si se apaga el broker no se pierden mensajes | Mensajes persistentes y suscripciones durables; probado matando WildFly con mensajes en la cola (plan de pruebas §6). |
 | ETag | `ETag` en turnos y pacientes (`@Version`), `If-None-Match` → 304, `If-Match` → 412. |
 | IA a través de su gateway | `GestorOrientacion`: validación, límite de 10/min (429), filtro de la salida y fallback. |
-| Plan de pruebas, matriz de trazabilidad y manual de usuario | [Plan_de_Pruebas.md](Plan_de_Pruebas.md), [Matriz_de_Trazabilidad.md](Matriz_de_Trazabilidad.md), [Manual_de_Usuario.md](Manual_de_Usuario.md). |
+| Plan de pruebas, matriz de trazabilidad y manual de usuario | [Plan_de_Pruebas_Final.md](../documentacion-final/Plan_de_Pruebas_Final.md), [Matriz_de_Trazabilidad_Final.md](../documentacion-final/Matriz_de_Trazabilidad_Final.md), [Manual_de_Usuario.md](Manual_de_Usuario.md). |
 
 Y adelantado para la entrega final: 429 ante fuerza bruta, corrección de un segundo BOLA
 (fichas de pacientes), PIT (85 %), k6 (p95 35,6 ms), ZAP en CI (0 High), gitleaks en CI,
 job de SonarCloud, Maven Wrapper + enforcer, evaluación de IA y
-[Informe_de_Estado.md](Informe_de_Estado.md).
+[Checklist_Requisitos_Finales.md](../documentacion-final/Checklist_Requisitos_Finales.md).
 
