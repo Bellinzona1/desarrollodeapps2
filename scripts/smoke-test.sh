@@ -23,7 +23,7 @@
 set -o pipefail
 
 BASE_URL="${1:-http://localhost:8080/mediconecta}"
-CLAVE="${MEDICONECTA_DEMO_CLAVE:-Demo.2026}"
+CLAVE="${MEDICONECTA_DEMO_CLAVE:?Defini MEDICONECTA_DEMO_CLAVE con la contrasena de los usuarios de demo}"
 
 for herramienta in curl jq; do
     command -v "$herramienta" > /dev/null || { echo "Falta $herramienta en el PATH."; exit 1; }
@@ -433,6 +433,28 @@ invocar GET /api/pacientes/28999888/cobertura "" paciente
 probar "Un PACIENTE no puede consultar la cobertura de otro (403)" "codigo=$CODIGO" '[ "$CODIGO" = 403 ]'
 WSDL="$(curl -s "$BASE_URL/ServicioObraSocialLegadoImpl?wsdl")"
 probar "El WSDL del sistema legado esta publicado" "" '[[ "$WSDL" == *definitions* ]]'
+
+# XXE (XML External Entity) y bomba de entidades contra el servicio SOAP: el
+# parser (CXF + Woodstox) rechaza cualquier DOCTYPE, asi que no lee archivos
+# del servidor ni expande entidades.
+SOBRE_SOAP='<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:s="http://simulacion.integraciones.mediconecta.com/"><soap:Body><s:consultarPlan><arg0>%s</arg0><arg1>30111222</arg1></s:consultarPlan></soap:Body></soap:Envelope>'
+soap() {
+    : > "$TMP/soap"
+    CODIGO="$(curl -s -o "$TMP/soap" -w '%{http_code}' -X POST -H 'Content-Type: text/xml; charset=utf-8' -H 'SOAPAction: ""' \
+        --data-binary "$1" "$BASE_URL/ServicioObraSocialLegadoImpl" || echo 000)"
+    TEXTO="$(cat "$TMP/soap")"
+}
+# shellcheck disable=SC2059
+soap "$(printf "$SOBRE_SOAP" OSDE)"
+probar "El servicio SOAP responde un pedido valido" "codigo=$CODIGO" '[ "$CODIGO" = 200 ] && [[ "$TEXTO" == *"OSDE 210"* ]]'
+# shellcheck disable=SC2059
+soap "<?xml version=\"1.0\"?><!DOCTYPE d [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>$(printf "$SOBRE_SOAP" '&xxe;')"
+probar "XXE: el SOAP rechaza la entidad externa con un Fault" "codigo=$CODIGO $TEXTO" \
+    '[ "$CODIGO" = 500 ] && [[ "$TEXTO" == *Fault* ]] && [[ "$TEXTO" != *"root:"* ]]'
+# shellcheck disable=SC2059
+soap "<?xml version=\"1.0\"?><!DOCTYPE l [<!ENTITY a \"aaaaaaaaaa\"><!ENTITY b \"&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;\">]>$(printf "$SOBRE_SOAP" '&b;')"
+probar "Bomba de entidades: el SOAP no expande entidades internas" "codigo=$CODIGO" \
+    '[ "$CODIGO" = 500 ] && [[ "$TEXTO" == *Fault* ]] && [[ "$TEXTO" != *aaaaaaaaaaaaaaaaaaaa* ]]'
 
 # ================================================== ASISTENTE STATEFUL =======
 
