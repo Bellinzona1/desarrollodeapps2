@@ -18,7 +18,7 @@
 
 set -o pipefail
 BASE_URL="${1:-http://localhost:8080/mediconecta}"
-CLAVE="${MEDICONECTA_DEMO_CLAVE:-Demo.2026}"
+CLAVE="${MEDICONECTA_DEMO_CLAVE:?Defini MEDICONECTA_DEMO_CLAVE con la contrasena de los usuarios de demo}"
 CASOS="$(dirname "$0")/casos.json"
 UMBRAL=80
 CABECERAS="$(mktemp)"

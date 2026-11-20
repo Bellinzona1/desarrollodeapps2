@@ -7,6 +7,7 @@
      contrasena que espera el datasource de WildFly. Es la forma mas rapida de
      tener la base andando sin instalar nada en la maquina.
 
+         $env:MEDICONECTA_DB_CLAVE = "<una contrasena>"
          .\levantar-postgres.ps1            # crea o arranca el contenedor
          .\levantar-postgres.ps1 -Borrar    # lo elimina junto con sus datos
 
@@ -23,11 +24,15 @@ param(
     [int]    $Puerto    = 5432,
     [string] $Base      = "mediconecta",
     [string] $Usuario   = "mediconecta",
-    [string] $Clave     = "mediconecta",
+    [string] $Clave     = $env:MEDICONECTA_DB_CLAVE,
     [switch] $Borrar
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $Borrar -and -not $Clave) {
+    throw "Falta la contrasena de la base: pasala con -Clave o defini MEDICONECTA_DB_CLAVE (no hay valor por omision)."
+}
 
 docker version --format "{{.Server.Version}}" | Out-Null
 if ($LASTEXITCODE -ne 0) {

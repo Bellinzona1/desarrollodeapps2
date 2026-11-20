@@ -184,8 +184,10 @@ jobs:
           {
             echo "MEDICONECTA_DB_CLAVE=$(openssl rand -hex 24)"
             echo "MEDICONECTA_JWT_SECRETO=$(openssl rand -base64 48 | tr -d '\n')"
-            echo "MEDICONECTA_DEMO_CLAVE=Demo.2026"
+            echo "MEDICONECTA_DEMO_CLAVE=$(openssl rand -hex 12)"
           } > .env
+          # Las pruebas leen la misma clave de demo que la aplicacion.
+          grep MEDICONECTA_DEMO_CLAVE .env >> "$GITHUB_ENV"
 
       - name: docker compose up
         run: docker compose up -d --build
@@ -200,11 +202,11 @@ jobs:
           exit 1
 
       - name: Prueba de humo (seguridad en vivo, ETag, idempotencia, JMS, DLQ, IA)
-        run: MEDICONECTA_DEMO_CLAVE=Demo.2026 ./scripts/smoke-test.sh http://localhost:8080/mediconecta
+        run: ./scripts/smoke-test.sh http://localhost:8080/mediconecta
 
       - name: Prueba de carga k6 (p95 < 500 ms, errores < 1 %)
         run: |
-          docker run --rm -i --network host -e BASE_URL=http://localhost:8080/mediconecta -e CLAVE=Demo.2026 \
+          docker run --rm -i --network host -e BASE_URL=http://localhost:8080/mediconecta -e CLAVE="$MEDICONECTA_DEMO_CLAVE" \
             grafana/k6:0.54.0 run --summary-trend-stats="avg,med,p(90),p(95),max" - < pruebas/carga/carga.js | tee k6.txt
           grep -E "http_req_duration|http_req_failed|checks" k6.txt | sed 's/^/    /' > k6-resumen.txt
           { echo "### Prueba de carga (k6)"; echo '```'; cat k6-resumen.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

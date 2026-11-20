@@ -27,8 +27,12 @@
 
 param(
     [string] $BaseUrl = "http://localhost:8080/mediconecta",
-    [string] $Clave   = "Demo.2026"
+    [string] $Clave   = $env:MEDICONECTA_DEMO_CLAVE
 )
+
+if (-not $Clave) {
+    throw "Falta la contrasena de los usuarios de demo: pasala con -Clave o defini MEDICONECTA_DEMO_CLAVE."
+}
 
 $ErrorActionPreference = "Continue"
 $script:ok = 0

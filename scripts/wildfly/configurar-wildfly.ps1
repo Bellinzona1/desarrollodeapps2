@@ -26,8 +26,9 @@
      Los pasos 3 y 4 necesitan el servidor ENCENDIDO, con el perfil
      standalone-full.xml (bin\standalone.bat -c standalone-full.xml).
 
-     Las credenciales de PostgreSQL se pueden pasar por parametro; el valor por
-     omision es el del contenedor Docker de scripts/db/levantar-postgres.ps1.
+     Las contrasenas se pasan por parametro (-ClaveBase, -ClaveDemo) o por las
+     variables MEDICONECTA_DB_CLAVE y MEDICONECTA_DEMO_CLAVE: no hay valores por
+     omision en el repositorio.
      No hay ninguna contrasena ni secreto dentro del codigo Java: si no se pasa
      -SecretoJwt, se genera uno aleatorio y queda guardado en el servidor.
 
@@ -41,9 +42,9 @@ param(
 
     [string] $VersionDriver = "42.7.4",
     [string] $UsuarioBase   = "mediconecta",
-    [string] $ClaveBase     = "mediconecta",
+    [string] $ClaveBase     = $env:MEDICONECTA_DB_CLAVE,
     [string] $UrlBase       = "jdbc:postgresql://localhost:5432/mediconecta",
-    [string] $ClaveDemo     = "Demo.2026",
+    [string] $ClaveDemo     = $env:MEDICONECTA_DEMO_CLAVE,
     [string] $SecretoJwt    = "",
     [switch] $SoloSeguridad,
     [switch] $SoloDatasource,
@@ -51,6 +52,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $SoloSeguridad -and -not $ClaveBase) {
+    throw "Falta la contrasena de la base: pasala con -ClaveBase o defini MEDICONECTA_DB_CLAVE (no hay valor por omision)."
+}
+if (-not $SoloDatasource -and -not $ClaveDemo) {
+    throw "Falta la contrasena de los usuarios de demo: pasala con -ClaveDemo o defini MEDICONECTA_DEMO_CLAVE."
+}
 
 function Paso($texto) {
     Write-Host ""
