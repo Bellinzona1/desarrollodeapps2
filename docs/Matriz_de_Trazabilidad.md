@@ -1,4 +1,5 @@
 # MediConecta — Matriz de trazabilidad (v1)
+> **Versión superada (v1, 19/11/2026).** La versión final, basada en la rama `integracion-final`, está en [`documentacion-final/`](../documentacion-final/README.md).
 
 **Versión:** 1.0 · **Fecha:** 19/11/2026. Relaciona cada requisito con el componente que lo
 implementa y con las pruebas que lo verifican. Los tipos de prueba (P1…P13) son los del

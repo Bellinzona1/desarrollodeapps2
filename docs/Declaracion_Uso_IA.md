@@ -1,4 +1,5 @@
 # MediConecta — Declaración de uso de inteligencia artificial
+> **Versión superada (v1, 19/11/2026).** La versión final, basada en la rama `integracion-final`, está en [`documentacion-final/`](../documentacion-final/README.md).
 
 ## 1. IA como parte del producto
 

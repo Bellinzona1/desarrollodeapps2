@@ -1,4 +1,5 @@
 # MediConecta — Informe de estado (3.er checkpoint, 20/11/2026)
+> **Versión superada (v1, 19/11/2026).** La versión final, basada en la rama `integracion-final`, está en [`documentacion-final/`](../documentacion-final/README.md).
 
 Informe honesto de qué está hecho, cómo se midió y qué falta. Base para el informe final.
 

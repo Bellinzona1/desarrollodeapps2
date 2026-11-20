@@ -1,4 +1,5 @@
 # MediConecta — Plan de pruebas (v1)
+> **Versión superada (v1, 19/11/2026).** La versión final, basada en la rama `integracion-final`, está en [`documentacion-final/`](../documentacion-final/README.md).
 
 **Versión:** 1.0 · **Fecha:** 19/11/2026 · **Alcance:** 3.er checkpoint (20/11) y entrega final.
 La correspondencia entre requisitos y casos de prueba está en
