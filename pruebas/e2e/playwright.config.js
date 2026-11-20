@@ -24,7 +24,10 @@ export default defineConfig({
     fullyParallel: false,
     retries: 0,
     forbidOnly: !!process.env.CI,
-    reporter: [['list'], ['html', { open: 'never', outputFolder: 'informe' }]],
+    // En el CI, el reporter "github" deja cada falla como anotacion del job.
+    reporter: process.env.CI
+        ? [['github'], ['list'], ['html', { open: 'never', outputFolder: 'informe' }]]
+        : [['list'], ['html', { open: 'never', outputFolder: 'informe' }]],
     use: {
         baseURL: (process.env.BASE_URL || 'http://localhost:8080/mediconecta') + '/',
         locale: 'es-AR',

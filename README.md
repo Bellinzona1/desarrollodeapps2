@@ -558,7 +558,7 @@ mediconecta/
         ├── app/                              pantallas
         └── WEB-INF/web.xml · jboss-web.xml · beans.xml · undertow-handlers.conf (SameSite)
 src/test/java/                                207 tests unitarios JUnit 5 y 6 de integracion (*IT, Testcontainers)
-pruebas/e2e/                                  11 pruebas E2E de la interfaz (Playwright)
+pruebas/e2e/                                  12 pruebas E2E de la interfaz (Playwright)
 ```
 
 ---

@@ -10,9 +10,9 @@ test.describe.serial('reserva y cancelacion de un turno', () => {
         await iniciarSesion(page, 'paciente');
         await page.goto('app/reserva.html');
 
-        // Paso 1: especialidad.
+        // Paso 1: especialidad (Cardiologia: sus profesionales de la carga de demo tienen agenda).
         await expect(page.locator('#paso h2')).toHaveText('Elegí una especialidad');
-        await page.locator('#paso .opcion[data-valor]').first().click();
+        await page.locator('#paso .opcion[data-valor="Cardiologia"]').click();
 
         // Paso 2: profesional.
         await expect(page.locator('#paso h2')).toHaveText('Elegí un profesional');
@@ -32,7 +32,7 @@ test.describe.serial('reserva y cancelacion de un turno', () => {
 
         // El turno aparece en "Mis turnos" del paciente.
         await page.goto('app/mis-turnos.html');
-        await expect(page.locator('main')).toContainText('#' + turnoId);
+        await expect(page.locator('a[href="turno.html?id=' + turnoId + '"]')).toHaveCount(1);
     });
 
     test('recepcion cancela el turno y queda en estado Cancelado', async ({ page }) => {

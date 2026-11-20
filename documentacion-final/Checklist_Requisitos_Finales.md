@@ -24,7 +24,7 @@ Estados: CUMPLE (evidencia ejecutada) · PARCIAL · NO CUMPLE · PENDIENTE (acci
 |---|---|---|---|
 | A | HU con ≥ 3 criterios Gherkin, MoSCoW | CUMPLE | [`docs/Historias_de_Usuario.md`](../docs/Historias_de_Usuario.md): 12 HU, 3–4 escenarios cada una |
 | A | BRD y decisiones de arquitectura | CUMPLE | [`docs/BRD.md`](../docs/BRD.md), [`docs/adr/`](../docs/adr/README.md) (10 ADR) |
-| A | ≥ 5 escenarios E2E de interfaz en CI | CUMPLE | `pruebas/e2e` (Playwright): 11 escenarios en el job `punta-a-punta` |
+| A | ≥ 5 escenarios E2E de interfaz en CI | CUMPLE | `pruebas/e2e` (Playwright): 12 escenarios en el job `punta-a-punta`, pasan 12/12 después del humo (151/151) en la imagen del CI |
 | A | Responsive 360/768/1280 | CUMPLE | E2E `responsive a 360/768/1280 px` sobre inicio, agenda, pacientes y reserva |
 | A | Lighthouse ≥ 90 | CUMPLE (login) | Lighthouse 12 sobre `login.html` (20/11): rendimiento 99, accesibilidad 100, buenas prácticas 96, SEO 90. Las pantallas internas requieren sesión: medir desde DevTools ya logueado |
 | A | Prueba del manual de usuario | PARCIAL | Los E2E recorren los flujos del manual; falta el ensayo manual del equipo |
