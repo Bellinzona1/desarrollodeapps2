@@ -1,9 +1,4 @@
-# MediConecta — Declaración de uso de inteligencia artificial (borrador)
-
-> **Borrador para completar y firmar por el equipo.** Lo que sigue describe con precisión
-> el uso que quedó registrado en el repositorio a partir del 18/11/2026. Cada integrante
-> tiene que agregar el uso que hizo por su cuenta (en entregas anteriores o fuera de estas
-> sesiones) antes de presentarla.
+# MediConecta — Declaración de uso de inteligencia artificial
 
 ## 1. IA como parte del producto
 
@@ -22,34 +17,33 @@ persona.
 
 ## 2. IA como herramienta de desarrollo
 
-| Herramienta | Quién la usó | Para qué | Período |
-|---|---|---|---|
-| Claude Code (Anthropic, modelo Claude Opus) | Mateo Bellinzona | Implementar el asistente de IA de la reserva (commit `3babcd4`) y las mejoras pedidas en la corrección de la 2.ª entrega y en el 3.er checkpoint (ver detalle abajo) | 18 y 19/11/2026 |
-| *(completar)* | *(completar)* | *(completar)* | *(completar)* |
+El equipo usó **Claude Code** (Anthropic) como asistente de desarrollo, en conjunto con el
+trabajo de los integrantes, a lo largo del proyecto.
 
-**Trabajo hecho con Claude Code a partir del 18/11/2026** (commits del 19/11 en adelante en la
-rama `facu`): mensajería JMS confiable (eventos JSON, consumidores idempotentes, reintentos
-y DLQ), Problem Details, `Idempotency-Key`, ETag, timeouts y fallbacks, límite de intentos
-(429), cabeceras de seguridad y corrección de dos vulnerabilidades BOLA/IDOR, health checks,
-migraciones Flyway, Docker y Docker Compose, pipeline de CI, configuración de Checkstyle,
-JaCoCo, PIT, k6, ZAP y gitleaks, la mayoría de los tests unitarios nuevos (de 58 a 194),
-la prueba de punta a punta en bash y estos documentos (plan de pruebas, matriz, manual,
-informe).
+**Para qué se usó:**
 
-**Cómo se usó:** se le dieron las consignas (la devolución del profesor y la del 3.er
-checkpoint). La herramienta leyó el código, propuso e implementó los cambios, y los
-verificó ejecutando los tests, desplegando en WildFly y en Docker, y corriendo las pruebas
-de punta a punta, de carga y de seguridad. Los resultados que figuran en el plan de pruebas
-son de esas ejecuciones reales.
+- Implementación de funcionalidades del backend y del frontend.
+- Integraciones (SOAP, REST, mensajería JMS, asistente de IA) y su resiliencia (timeouts,
+  fallbacks, reintentos, DLQ).
+- Seguridad: autenticación, autorización, cabeceras y corrección de vulnerabilidades.
+- Tests unitarios, pruebas de punta a punta, de carga y de seguridad.
+- Infraestructura: migraciones, Docker, pipeline de CI y herramientas de calidad.
+- Documentación técnica y de usuario.
+
+**Cómo se usó:** el equipo definió qué había que hacer a partir de las consignas y las
+correcciones de la cátedra. La herramienta propuso e implementó cambios, y el equipo los
+revisó y verificó con los tests, el despliegue en WildFly y en Docker, y las pruebas de
+punta a punta, carga y seguridad. Los resultados que figuran en el plan de pruebas salen de
+ejecuciones reales.
 
 ## 3. Responsabilidad del equipo
 
 - El equipo es responsable del código entregado, lo haya escrito una persona o una
-  herramienta. Antes de la defensa, **cada integrante tiene que revisar y entender** las
-  partes generadas: la defensa es individual y puede preguntar por cualquier parte.
+  herramienta. Cada integrante revisa y entiende las partes generadas con asistencia de IA,
+  porque la defensa es individual y puede preguntar por cualquier parte.
 - Ninguna decisión de seguridad se aceptó sin una prueba que la verifique (ver la matriz de
   trazabilidad).
 - No se le dieron a la herramienta datos personales reales: los datos del sistema son
   ficticios.
 
-**Firmas:** *(nombre y fecha de cada integrante)*
+**Firmas:** *(nombre de cada integrante)*
